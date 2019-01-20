@@ -712,7 +712,7 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 									</div>
 								</div>
 								<div class="col-xs-8 centerText">
-									<h3 class="title-text"><img class="logoIcn" src="http://www.tankutility.com/wp-content/uploads/2015/08/icon175x175.png"> ${myTitle}</img></h3>
+									<h3 class="title-text"><img class="logoIcn" src="https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/icon175x175.png"> ${myTitle}</img></h3>
 								</div>
 								<div class="col-xs-2 right-head-col pull-right">
 									<button id="rfrshBtn" type="button" class="btn refresh-btn pull-right" title="Refresh Page Content"><i id="rfrshBtnIcn" class="fa fa-refresh" aria-hidden="true"></i></button>
@@ -1093,11 +1093,13 @@ def getEDeviceTile(devNum="", dev) {
 		def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
 //Logger("used: $used  gal: $gal  ygal: $ygal  ylevel: $ylevel  t1: $t1")
 		def num = 1
-		if(level >= 13) { num = 2 }
-		if(level >= 33) { num = 3 }
-		if(level >= 53) { num = 4 }
-		if(level >= 73) { num = 5 }
-		def url = "https://app.tankutility.com/images/tank-${num}.png"
+		t0 = capacity*0.8
+		if(gal >= (t0*0.25)) { num = 2 }
+		if(gal >= (t0*0.45)) { num = 3 }
+		if(gal >= (t0*0.65)) { num = 4 }
+		if(gal >= (t0*0.9)) { num = 5 }
+		//def url = "https://app.tankutility.com/images/tank-${num}.png"
+		def url = "https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/tank-${num}.png"
 
 		def mainHtml = """
 			<div class="device">
