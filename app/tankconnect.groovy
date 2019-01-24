@@ -62,17 +62,25 @@ def uninstalled() {
 def initialize() {
 	LogTrace("initialize")
 
+	settingUpdate("showDebug", "true", "bool")
+	def traceWasOn = false
+	if(settings?.advAppDebug) {
+		traceWasOn = true
+	}
+	settingUpdate("advAppDebug", "true", "bool")
+
 	if(!state?.autoTyp) { state.autoTyp = "chart" }
 	unsubscribe()
 	unschedule()
 
-	stateRemove("evalSched")
-	stateRemove("detailEventHistory")
+	//stateRemove("evalSched")
+	//stateRemove("detailEventHistory")
 
 	setAutomationStatus()
 
 	def devs = getDevices()
 	def devicestatus = RefreshDeviceStatus()
+	def quickOut = false
 	devs.each { dev ->
 		def ChildName = getChildName()
 		def TUDeviceID = dev
@@ -80,25 +88,34 @@ def initialize() {
 		def devinfo = devicestatus[TUDeviceID]
 		def d = getChildDevice(dni)
 		if(!d) {
-			d = addChildDevice(app.namespace, ChildName, dni, null, ["label": devinfo.name ?: ChildName])
-			LogAction("created ${d.displayName} with dni: ${dni}", "info", false)
+			d = addChildDevice("imnotbob", ChildName, dni, null, ["label": devinfo.name ?: ChildName])
+			LogAction("created ${d.displayName} with dni: ${dni}", "info", true)
+			runIn(5, "updated", [overwrite: true])
+			quickOut = true
+			return
 		} else {
-			LogAction("device for ${d.displayName} with dni ${dni} already exists", "info", false)
+		}
+		if(d) {
+			LogAction("device for ${d.displayName} with dni ${dni} found", "info", true)
 			subscribe(d, "energy", automationGenericEvt)
 			subscribe(d, "temperature", automationGenericEvt)
 		}
 		return d
 	}
+	if(quickOut) { return true } // we'll be back with runIn after devices settle
+
 	subscribe(location, "sunrise", automationGenericEvt)
 
 	runEvery1Hour("pollChildren")
 
-	settingUpdate("showDebug", "true", "bool")
-	settingUpdate("advAppDebug", "true", "bool")
-
 	scheduleAutomationEval(30)
-	if(showDebug || advAppDebug) { runIn(1800, logsOff) }
-	pollChildren()
+
+	if(!traceWasOn) {
+		settingUpdate("advAppDebug", "false", "bool")
+	}
+	runIn(1800, logsOff, [overwrite: true])
+
+	pollChildren(false)
 }
 
 private settingsPage(){
@@ -106,11 +123,7 @@ private settingsPage(){
 	if(!state?.access_token) { enableOauth(); getAccessToken() }
 
 	return dynamicPage(name: "settings", title: "Settings", nextPage: "", uninstall:true, install:true) {
-	 	def message = true
-		if (isTokenExpired()) {
-			LogAction("API token expired at ${state.APITokenExpirationTime}. Refreshing API Token", "info", false)
-			message = getAPIToken()
-		}
+	 	def message = getToken()
 		if(!(message == true)){
 			section("Authentication") {
 				paragraph "${message}. Enter your TankUtility Username and Password."
@@ -124,20 +137,27 @@ private settingsPage(){
 
 			section() {
 				def devs = state.devices
+				if(!devs) {
+					devs = getDevices()
+					def devicestatus = RefreshDeviceStatus()
+				}
 				def t1 = ""
 				t1 = devs?.size() ? "Status\n • Tanks (${devs.size()})" : ""
-				if(devs.size() > 1) {
+				if(devs?.size() > 1) {
 					def myUrl = getAppEndpointUrl("deviceTiles")
 					def myStr = """ <a href="${myUrl}" target="_blank">All Tanks</a> """
 					paragraph imgTitle(getAppImg("graph_icon.png"), paraTitleStr(myStr))
 				}
 				devs.each { dev ->
 					def deviceid = dev
+					def dni = getDeviceDNI(deviceid)
+					def d1 = getChildDevice(dni)
+					if(!d1) { return }
+// Likely should let someone select which tanks are created here.
+/*
 					def deviceData = state.deviceData
 					def devData = deviceData[deviceid]
 					def LastReading = devData.lastReading
-					def dni = getDeviceDNI(deviceid)
-					def d1 = getChildDevice(dni)
 					def temperature = LastReading.temperature.toInteger()
 					def level = (LastReading.tank).toFloat().round(2)
 					def lastReadTime = LastReading.time_iso
@@ -149,6 +169,7 @@ private settingsPage(){
 						['capacity': capacity],
 						['lastreading': lastReadTime],
 						]
+*/
 					def sUrl = "${fullApiServerUrl("")}"
 					def myUrl = "${sUrl}" + "/getTile/${dni}" + "?access_token=${state.access_token}"
 //Logger("mainAuto sUrl: ${sUrl}   myUrl: ${myUrl}")
@@ -189,6 +210,12 @@ private settingsPage(){
 
 private getDevices() {
 	LogTrace("getDevices")
+	def devices = []
+
+	if( !(getToken() == true)) {
+		LogAction("getDevice: no token available", "info", true)
+		return devices
+	}
 	def Params = [
 		uri: TankUtilityDataEndPoint(),
 		path: "/api/devices",
@@ -197,7 +224,6 @@ private getDevices() {
 		],
 	]
 	
-	def devices = []
 	try {
 		httpGet(Params) { resp ->
 			if(resp.status == 200) {	
@@ -223,8 +249,18 @@ private getDevices() {
 
 private RefreshDeviceStatus() {
 	LogTrace("RefreshDeviceStatus()")
-	def devices = state.devices
 	def deviceData = [:]
+
+	if( !(getToken() == true)) {
+		LogAction("RefreshDeviceStatus: no token available", "info", true)
+		return deviceData
+	}
+	def devices = state?.devices
+	if(!devices) {
+		LogAction("RefreshDeviceState: no devices avaiable", "warn", true)
+		return deviceData
+	}
+
 	devices.each {dev ->
 		def dni = getDeviceDNI(dev)
 		def Params = [
@@ -238,9 +274,9 @@ private RefreshDeviceStatus() {
 			httpGet(Params) { resp ->
 				if(resp.status == 200) {	
 					deviceData[dev] = resp.data.device
-					LogTrace("device data for ${dev} = ${deviceData[dev]}")
+					LogTrace("RefreshDeviceStatus: received device data for ${dev} = ${deviceData[dev]}")
 				} else {
-					LogAction("Error while processing events for RefreshDeviceStatus ${resp.status}", "error", true)
+					LogAction("RefreshDeviceStatus: Error while receiving events ${resp.status}", "error", true)
 					state.APIToken = null
 					state.APITokenExpirationTime = 0
 				}
@@ -256,6 +292,33 @@ private RefreshDeviceStatus() {
 	return deviceData
 }
 
+private getToken() {
+	LogTrace("getToken()")
+	def message = true
+	if(!settings?.UserName || !settings?.Password) {
+		LogAction("getToken no password", "warn", false)
+		return ""
+	 }
+	if (isTokenExpired() || !state?.APIToken) {
+		LogTrace("API token expired at ${state?.APITokenExpirationTime}. Refreshing API Token")
+		message = getAPIToken()
+		if(!(message == true)){
+			log.warn "Was not able to refresh API token expired at ${state?.APITokenExpirationTime}."
+		}
+	} 
+	return message
+}
+
+private isTokenExpired() {
+	def currentDate = now()
+	if (state?.APITokenExpirationTime == null) {
+		return true
+	} else {
+		def ExpirationDate = state?.APITokenExpirationTime
+		if (currentDate >= ExpirationDate) {return true} else {return false}
+	}
+}
+
 private String getBase64AuthString() {
 	String authorize = "${settings.UserName}:${settings.Password}"
 	String authorize_encoded = authorize.bytes.encodeBase64()
@@ -263,7 +326,7 @@ private String getBase64AuthString() {
 }
 
 private getAPIToken() {
-	LogTrace("getAPIToken()Requesting an API Token!")
+	log.trace "getAPIToken()Requesting an API Token!"
 	def Params = [
 		uri: TankUtilAPIEndPoint(),
 		path: "/api/getToken",
@@ -282,43 +345,50 @@ private getAPIToken() {
 				} 
 			}
 			state.APIToken = null
-			state.APITokenExpirationTime = null
+			state.APITokenExpirationTime = 0
 			return resp.data.error
 		}
 	} catch (e) {
 		log.error "Error in the getAPIToken method: $e"
 		state.APIToken = null
-		state.APITokenExpirationTime = null
+		state.APITokenExpirationTime = 0
 		return false
 	}
 }
 
-private isTokenExpired() {
-	def currentDate = now()
-	if (state.APITokenExpirationTime == null) {
-		return true
-	} else {
-		def ExpirationDate = state.APITokenExpirationTime
-		if (currentDate >= ExpirationDate) {return true} else {return false}
-	}
-}
-
-def pollChildren(){
+def pollChildren(updateData=true){
 	def execTime = now()
 	LogTrace("pollChildren")
-	if (isTokenExpired()) {
-		LogAction("API token expired at ${state.APITokenExpirationTime}. Refreshing API Token", "info", false)
-		getAPIToken()
+	if( !(getToken() == true)) {
+		LogAction("pollChilcren: Was not able to refresh API token expired at ${state.APITokenExpirationTime}.", "warn", true)
+		return
 	}
 	def devices = state.devices
-	def deviceData = RefreshDeviceStatus()
+	if(!devices) {
+		LogAction("pollChilcren: no devices available", "warn", true)
+		return
+	}
+	def deviceData
+	if(updateData) {
+		deviceData = RefreshDeviceStatus()
+	} else {
+		deviceData = state.deviceData
+	}
 	devices.each {dev ->
 		try {
 			def deviceid = dev
-			def devData = deviceData[deviceid]
-			def LastReading = devData.lastReading
 			def dni = getDeviceDNI(deviceid)
 			def d = getChildDevice(dni)
+			if(!d) {
+				LogAction("pollChilcren: no device found $dni", "warn", true)
+				return false
+			}
+			def devData = deviceData[deviceid]
+			if(!devData) {
+				LogAction("pollChilcren: no device data available $d.label", "warn", true)
+				return false
+			}
+			def LastReading = devData.lastReading
 			def temperature = LastReading.temperature.toInteger()
 			def level = (LastReading.tank).toFloat().round(2)
 			def lastReadTime = LastReading.time_iso
@@ -330,13 +400,13 @@ def pollChildren(){
 				['capacity': capacity],
 				['lastreading': lastReadTime],
 			]
-			LogAction("Sending events: ${events}", "info", false)
+			LogAction("pollChidren: Sending events: ${events}", "info", false)
 			events.each {
 				event -> d.generateEvent(event)
 			}
-			LogTrace("device data for ${deviceid} = ${devData}")
+			LogTrace("pollChildren: sent device data for ${deviceid} = ${devData}")
 		} catch (e) {
-			log.error "Error while processing events for pollChildren: ${e}"
+			log.error "pollChildren: Error while sending  events for pollChildren: ${e}"
 		}
 	}
 	storeExecutionHistory((now()-execTime), "pollChildren")
@@ -471,10 +541,14 @@ def scheduleAutomationEval(schedtime = defaultAutomationTime()) {
 		def t0 = state?.evalSchedLastTime
 		if(t0 == null) { t0 = 0 }
 		def timeLeftPrev = t0 - getAutoRunInSec()
+		if(timeLeftPrev < 0) { timeLeftPrev = 100 }
 		def str1 = " Schedule change: from (${timeLeftPrev}sec) to (${theTime}sec)"
 		if(timeLeftPrev > (theTime + 5) || waitOverride) {
 			if(Math.abs(timeLeftPrev - theTime) > 3) {
 				runIn(theTime, "runAutomationEval", [overwrite: true])
+				state?.autoRunInSchedDt = getDtNow()
+				state.evalSched = true
+				state.evalSchedLastTime = theTime
 				LogTrace("${str}Performing${str1}")
 			}
 		} else { LogTrace("${str}Skipping${str1}") }
@@ -560,6 +634,7 @@ def runAutomationEval() {
 
 
 def getSomeData(dev, temperature, level) {
+	LogAction("getSomeData: ${temperature} ${level}", "info", false)
 	if (state?."TtempTbl${dev.id}" == null) {
 		state."TtempTbl${dev.id}" = []
 		state."TEnergyTbl${dev.id}" = []
@@ -1343,12 +1418,14 @@ def LogTrace(msg, logSrc=null) {
 	}
 }
 
-def LogAction(msg, type="debug", showAlways=false, logSrc=null) {
+def LogAction(msg, type=null, showAlways=false, logSrc=null) {
+	def myType = type ?: "debug"
 	def isDbg = showDebug ? true : false
-	if(showAlways || isDbg) { Logger(msg, type, logSrc) }
+	if(showAlways || isDbg) { Logger(msg, myType, logSrc) }
 }
 
-def Logger(msg, type="debug", logSrc=null, noLog=false) {
+def Logger(msg, type=null, logSrc=null, noLog=false) {
+	def myType = type ?: "debug"
 	if(!noLog) {
 		if(msg && type) {
 			def labelstr = ""
@@ -1360,12 +1437,12 @@ def Logger(msg, type="debug", logSrc=null, noLog=false) {
 			if(state?.dbgAppndName) { labelstr = "${app.label} | " }
 			def themsg = "${labelstr}${msg}"
 			//log.debug "Logger remDiagTest: $msg | $type | $logSrc"
-			switch(type) {
+			switch(myType) {
 				case "debug":
 					log.debug "${themsg}"
 					break
 				case "info":
-					log.info "| ${themsg}"
+					log.info "|| ${themsg}"
 					break
 				case "trace":
 					log.trace "| ${themsg}"
@@ -1374,7 +1451,7 @@ def Logger(msg, type="debug", logSrc=null, noLog=false) {
 					log.error "| ${themsg}"
 					break
 				case "warn":
-					log.warn "|| ${themsg}"
+					log.warn "| ${themsg}"
 					break
 				default:
 					log.debug "${themsg}"
