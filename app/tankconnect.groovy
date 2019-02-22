@@ -1165,7 +1165,9 @@ def getEDeviceTile(devNum="", dev) {
 //Logger("again t1: $t1    t0: ${t0}")
 		def ylevel = t1 ? t1[1] : 0 
 		def ygal = (capacity * ylevel/100).toFloat().round(2)
-		def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
+		//def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
+		def used = (ygal-gal).toFloat().round(2)
+		used = (used < -2) ? "${used} (refilled)" : used
 //Logger("used: $used  gal: $gal  ygal: $ygal  ylevel: $ylevel  t1: $t1")
 		def num = 1
 		t0 = capacity*0.8
