@@ -12,6 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
+ *	July 30, 2019
  */
 
 import groovy.json.*
@@ -44,26 +45,26 @@ private static String TankUtilAPIEndPoint() { return "https://data.tankutility.c
 private static String TankUtilityDataEndPoint() { return TankUtilAPIEndPoint() }
 private static getChildName() { return "Tank Utility" }
 
-def installed() {
+void installed() {
 	log.info "Installed with settings: ${settings}"
 	initialize()
 }
 
-def updated() {
+void updated() {
 	log.info "Updated with settings: ${settings}"
 	initialize()
 }
 
-def uninstalled() {
+void uninstalled() {
 	def todelete = getAllChildDevices()
 	todelete.each { deleteChildDevice(it.deviceNetworkId) }
 }
 
-def initialize() {
+void initialize() {
 	LogTrace("initialize")
 
 	settingUpdate("showDebug", "true", "bool")
-	def traceWasOn = false
+	boolean traceWasOn = false
 	if(settings?.advAppDebug) {
 		traceWasOn = true
 	}
@@ -80,7 +81,7 @@ def initialize() {
 
 	def devs = getDevices()
 	def devicestatus = RefreshDeviceStatus()
-	def quickOut = false
+	boolean quickOut = false
 	devs.each { dev ->
 		def ChildName = getChildName()
 		def TUDeviceID = dev
@@ -102,7 +103,7 @@ def initialize() {
 		}
 		return d
 	}
-	if(quickOut) { return true } // we'll be back with runIn after devices settle
+	if(quickOut) { return } // we'll be back with runIn after devices settle
 
 	subscribe(location, "sunrise", automationGenericEvt)
 
@@ -141,7 +142,7 @@ private settingsPage(){
 					devs = getDevices()
 					def devicestatus = RefreshDeviceStatus()
 				}
-				def t1 = ""
+				String t1 = ""
 				t1 = devs?.size() ? "Status\n • Tanks (${devs.size()})" : ""
 				if(devs?.size() > 1) {
 					def myUrl = getAppEndpointUrl("deviceTiles")
@@ -357,7 +358,7 @@ private getAPIToken() {
 }
 
 def pollChildren(updateData=true){
-	def execTime = now()
+	long execTime = now()
 	LogTrace("pollChildren")
 	if( !(getToken() == true)) {
 		LogAction("pollChilcren: Was not able to refresh API token expired at ${state.APITokenExpirationTime}.", "warn", true)
@@ -416,13 +417,13 @@ def getDeviceDNI(DeviceID) {
 	return [app.id, DeviceID].join('.')
 }
 
-def strCapitalize(str) {
+String strCapitalize(str) {
 	return str ? str?.toString().capitalize() : null
 }
 
 def automationGenericEvt(evt) {
-	def startTime = now()
-	def eventDelay = startTime - evt.date.getTime()
+	long startTime = now()
+	long eventDelay = startTime - evt.date.getTime()
 	LogAction("${evt?.name.toUpperCase()} Event | Device: ${evt?.displayName} | Value: (${strCapitalize(evt?.value)}) with a delay of ${eventDelay}ms", "info", false)
 
 	doTheEvent(evt)
@@ -443,12 +444,12 @@ def storeLastEventData(evt) {
 		//log.debug "LastEvent: ${state?.lastEventData}"
 
 		def list = state?.detailEventHistory ?: []
-		def listSize = 10
+		int listSize = 10
 		if(list?.size() < listSize) {
 			list.push(newVal)
 		}
 		else if(list?.size() > listSize) {
-			def nSz = (list?.size()-listSize) + 1
+			int nSz = (list?.size()-listSize) + 1
 			def nList = list?.drop(nSz)
 			nList?.push(newVal)
 			list = nList
@@ -462,7 +463,7 @@ def storeLastEventData(evt) {
 	}
 }
 
-def storeExecutionHistory(val, method = null) {
+void storeExecutionHistory(val, String method = null) {
 	//log.debug "storeExecutionHistory($val, $method)"
 	//try {
 		if(method) {
@@ -471,13 +472,13 @@ def storeExecutionHistory(val, method = null) {
 		if(method in ["watchDogCheck", "checkNestMode", "schMotCheck"]) {
 			state?.autoExecMS = val ?: null
 			def list = state?.evalExecutionHistory ?: []
-			def listSize = 20
+			int listSize = 20
 			list = addToList(val, list, listSize)
 			if(list) { state?.evalExecutionHistory = list }
 		}
 		//if(!(method in ["watchDogCheck", "checkNestMode"])) {
 			def list = state?.detailExecutionHistory ?: []
-			def listSize = 15
+			int listSize = 15
 			list = addToList([val, method, getDtNow()], list, listSize)
 			if(list) { state?.detailExecutionHistory = list }
 		//}
@@ -489,11 +490,11 @@ def storeExecutionHistory(val, method = null) {
 */
 }
 
-def addToList(val, list, listSize) {
+def addToList(val, list, int listSize) {
 	if(list?.size() < listSize) {
 		list.push(val)
 	} else if(list?.size() > listSize) {
-		def nSz = (list?.size()-listSize) + 1
+		int nSz = (list?.size()-listSize) + 1
 		def nList = list?.drop(nSz)
 		nList?.push(val)
 		list = nList
@@ -512,18 +513,18 @@ def defaultAutomationTime() {
 def scheduleAutomationEval(schedtime = defaultAutomationTime()) {
 	def theTime = schedtime
 	if(theTime < defaultAutomationTime()) { theTime = defaultAutomationTime() }
-	def autoType = getAutoType()
+	String autoType = getAutoType()
 	def random = new Random()
-	def random_int = random.nextInt(6)  // this randomizes a bunch of automations firing at same time off same event
-	def waitOverride = false
+	int random_int = random.nextInt(6)  // this randomizes a bunch of automations firing at same time off same event
+	boolean waitOverride = false
 	switch(autoType) {
 		case "chart":
 			if(theTime == defaultAutomationTime()) {
 				theTime += random_int
 			}
-			def schWaitVal = settings?.schMotWaitVal?.toInteger() ?: 60
+			int schWaitVal = settings?.schMotWaitVal?.toInteger() ?: 60
 			if(schWaitVal > 120) { schWaitVal = 120 }
-			def t0 = getAutoRunSec()
+			int t0 = getAutoRunSec()
 			if((schWaitVal - t0) >= theTime ) {
 				theTime = (schWaitVal - t0)
 				waitOverride = true
@@ -537,12 +538,12 @@ def scheduleAutomationEval(schedtime = defaultAutomationTime()) {
 		state.evalSched = true
 		state.evalSchedLastTime = theTime
 	} else {
-		def str = "scheduleAutomationEval: "
+		String str = "scheduleAutomationEval: "
 		def t0 = state?.evalSchedLastTime
 		if(t0 == null) { t0 = 0 }
-		def timeLeftPrev = t0 - getAutoRunInSec()
+		int timeLeftPrev = t0 - getAutoRunInSec()
 		if(timeLeftPrev < 0) { timeLeftPrev = 100 }
-		def str1 = " Schedule change: from (${timeLeftPrev}sec) to (${theTime}sec)"
+		String str1 = " Schedule change: from (${timeLeftPrev}sec) to (${theTime}sec)"
 		if(timeLeftPrev > (theTime + 5) || waitOverride) {
 			if(Math.abs(timeLeftPrev - theTime) > 3) {
 				runIn(theTime, "runAutomationEval", [overwrite: true])
@@ -556,14 +557,14 @@ def scheduleAutomationEval(schedtime = defaultAutomationTime()) {
 }
 
 
-def getAutoRunSec() { return !state?.autoRunDt ? 100000 : GetTimeDiffSeconds(state?.autoRunDt, null, "getAutoRunSec").toInteger() }
+int getAutoRunSec() { return !state?.autoRunDt ? 100000 : GetTimeDiffSeconds(state?.autoRunDt, null, "getAutoRunSec").toInteger() }
 
-def getAutoRunInSec() { return !state?.autoRunInSchedDt ? 100000 : GetTimeDiffSeconds(state?.autoRunInSchedDt, null, "getAutoRunInSec").toInteger() }
+int getAutoRunInSec() { return !state?.autoRunInSchedDt ? 100000 : GetTimeDiffSeconds(state?.autoRunInSchedDt, null, "getAutoRunInSec").toInteger() }
 
 def runAutomationEval() {
 	LogTrace("runAutomationEval")
-	def execTime = now()
-	def autoType = getAutoType()
+	long execTime = now()
+	String autoType = getAutoType()
 	state.evalSched = false
 	state?.evalSchedLastTime = null
 	switch(autoType) {
@@ -640,13 +641,13 @@ def getSomeData(dev, temperature, level) {
 		state."TEnergyTbl${dev.id}" = []
 	}
 
-	def tempTbl = state?."TtempTbl${dev.id}"
-	def energyTbl = state?."TEnergyTbl${dev.id}"
+	List tempTbl = state?."TtempTbl${dev.id}"
+	List energyTbl = state?."TEnergyTbl${dev.id}"
 
 	def newDate = new Date()
 	if(newDate == null) { Logger("got null for new Date()") }
 
-	def dayNum = newDate.format("D", location.timeZone) as Integer
+	int dayNum = newDate.format("D", location.timeZone) as Integer
 //	def hr = newDate.format("H", location.timeZone) as Integer
 //	def mins = newDate.format("m", location.timeZone) as Integer
 
@@ -655,7 +656,7 @@ def getSomeData(dev, temperature, level) {
 
 }
 
-def addValue(table, dayNum, val) {
+def addValue(List table, int dayNum, val) {
 	def newTable = table
 	if(table?.size()) {
 		def lastDay = table.last()[0]
@@ -678,9 +679,9 @@ def addValue(table, dayNum, val) {
 
 def getTile() {
 	LogTrace ("getTile()")
-	def responseMsg = ""
+	String responseMsg = ""
 
-	def dni = "${params?.dni}"
+	String dni = "${params?.dni}"
 	if (dni) {
 		def device = getChildDevice(dni)
 //		def device = parent.getDevice(dni)
@@ -697,11 +698,11 @@ def getTile() {
 }
 
 def renderDeviceTiles(type=null, theDev=null) {
-	def execTime = now()
+	long execTime = now()
 //	try {
-		def devHtml = ""
-		def navHtml = ""
-		def scrStr = ""
+		String devHtml = ""
+		String navHtml = ""
+		String scrStr = ""
 		def allDevices = []
 		if(theDev) {
 			allDevices << theDev
@@ -711,18 +712,18 @@ def renderDeviceTiles(type=null, theDev=null) {
 
 
 		def devices = allDevices
-		def devNum = 1
-		def myType = type ?: "All Devices"
+		int devNum = 1
+		String myType = type ?: "All Devices"
 		devices?.sort {it?.getLabel()}.each { dev ->
 			def navMap = [:]
-			def hasHtml = true // (dev?.hasHtml() == true)
+			boolean hasHtml = true // (dev?.hasHtml() == true)
 //Logger("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeName}")
 			if( (dev?.typeName in ["Tank Utility"]) &&
 				( (hasHtml && !type) || (hasHtml && type && dev?.name == type)) ) {
 LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeName}")
 				navMap = ["key":dev?.getLabel(), "items":[]]
 				def navItems = navHtmlBuilder(navMap, devNum)
-				def myTile = getEDeviceTile(devNum, dev) //dev.name == "Nest Thermostat" ? getTDeviceTile(devNum, dev) : getWDeviceTile(devNum, dev)
+				String myTile = getEDeviceTile(devNum, dev) //dev.name == "Nest Thermostat" ? getTDeviceTile(devNum, dev) : getWDeviceTile(devNum, dev)
 				if(navItems?.html) { navHtml += navItems?.html }
 				if(navItems?.js) { scrStr += navItems?.js }
 
@@ -742,10 +743,10 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 			}
 		}
 
-		def myTitle = "All Devices"
+		String myTitle = "All Devices"
 		myTitle = type ? "${type}s" : myTitle
 		myTitle = theDev ? "Tank Chart" : myTitle
-		def html = """
+		String html = """
 		<html lang="en">
 			<head>
 				${getWebHeaderHtml(myType, true, true, true, true)}
@@ -833,8 +834,8 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 
 def navHtmlBuilder(navMap, idNum) {
 	def res = [:]
-	def htmlStr = ""
-	def jsStr = ""
+	String htmlStr = ""
+	String jsStr = ""
 	if(navMap?.key) {
 		htmlStr += """
 			<div class="nav-cont-bord-div nav-menu">
@@ -856,8 +857,8 @@ def navHtmlBuilder(navMap, idNum) {
 	return res
 }
 
-def navJsBuilder(btnId, divId) {
-	def res = """
+String navJsBuilder(btnId, divId) {
+	String res = """
 			\$("#${btnId}").click(function() {
 				\$("html, body").animate({scrollTop: \$("#${divId}").offset().top - hdrHeight - 20},500);
 				closeNavMenu();
@@ -868,8 +869,8 @@ def navJsBuilder(btnId, divId) {
 }
 
 
-def getWebHeaderHtml(title, clipboard=true, vex=false, swiper=false, charts=false) {
-	def html = """
+String getWebHeaderHtml(title, clipboard=true, vex=false, swiper=false, charts=false) {
+	String html = """
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 		<meta name="description" content="NST Graphs">
@@ -907,8 +908,8 @@ def getWebHeaderHtml(title, clipboard=true, vex=false, swiper=false, charts=fals
 	return html
 }
 
-def hideChartHtml() {
-	def data = """
+String hideChartHtml() {
+	String data = """
 		<div class="swiper-slide">
 			<section class="sectionBg" style="min-height: 250px;">
 				<h3>Event History</h3>
@@ -931,8 +932,8 @@ String getAutomationType() {
 	return state?.autoTyp ?: null
 }
 
-def getAppEndpointUrl(subPath) { return "${getFullApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state?.access_token}" }
-def getLocalEndpointUrl(subPath) { return "${getFullLocalApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state?.access_token}" }
+String getAppEndpointUrl(subPath) { return "${getFullApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state?.access_token}" }
+String getLocalEndpointUrl(subPath) { return "${getFullLocalApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state?.access_token}" }
 
 def getAccessToken() {
 	try {
@@ -974,20 +975,20 @@ void resetAppAccessToken(reset) {
 	}
 }
 
-def sectionTitleStr(title)	{ return "<h3>$title</h3>" }
-def inputTitleStr(title)	{ return "<u>$title</u>" }
-def pageTitleStr(title)		{ return "<h1>$title</h1>" }
-def paraTitleStr(title)		{ return "<b>$title</b>" }
+String sectionTitleStr(title)	{ return "<h3>$title</h3>" }
+String inputTitleStr(title)	{ return "<u>$title</u>" }
+String pageTitleStr(title)		{ return "<h1>$title</h1>" }
+String paraTitleStr(title)		{ return "<b>$title</b>" }
 
-def imgTitle(imgSrc, titleStr, color=null, imgWidth=30, imgHeight=null) {
-	def imgStyle = ""
+String imgTitle(String imgSrc, String titleStr, String color=null, imgWidth=30, imgHeight=null) {
+	String imgStyle = ""
 	imgStyle += imgWidth ? "width: ${imgWidth}px !important;" : ""
 	imgStyle += imgHeight ? "${imgWidth ? " " : ""}height: ${imgHeight}px !important;" : ""
 	if(color) { return """<div style="color: ${color}; font-weight: bold;"><img style="${imgStyle}" src="${imgSrc}"> ${titleStr}</img></div>""" }
 	else { return """<img style="${imgStyle}" src="${imgSrc}"> ${titleStr}</img>""" }
 }
 
-def icons(name, napp="App") {
+String icons(name, napp="App") {
 	def icon_names = [
 		"i_dt": "delay_time",
 		"i_not": "notification",
@@ -1003,25 +1004,25 @@ def icons(name, napp="App") {
 
 	]
 	//return icon_names[name]
-	def t0 = icon_names?."${name}"
+	String t0 = icon_names?."${name}"
 	//LogAction("t0 ${t0}", "warn", true)
 	if(t0) return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${t0}_icon.png"
 	else return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${name}"
 }
 
-def gitRepo()	{ return "tonesto7/nest-manager"}
-def gitBranch()	{ return "master" }
-def gitPath()	{ return "${gitRepo()}/${gitBranch()}"}
+String gitRepo()	{ return "tonesto7/nest-manager"}
+String gitBranch()	{ return "master" }
+String gitPath()	{ return "${gitRepo()}/${gitBranch()}"}
 
-def getAppImg(imgName, on = null) {
+String getAppImg(imgName, on = null) {
 	return (!disAppIcons || on) ? icons(imgName) : ""
 }
 
-def getDevImg(imgName, on = null) {
+String getDevImg(imgName, on = null) {
 	return (!disAppIcons || on) ? icons(imgName, "Devices") : ""
 }
 
-def logsOff() {
+void logsOff() {
 	Logger("debug logging disabled...")
 	settingUpdate("showDebug", "false", "bool")
 	settingUpdate("advAppDebug", "false", "bool")
@@ -1071,7 +1072,7 @@ def setAutomationStatus(upd=false) {
 	if(upd) { app.update() }
 }
 
-def getIsAutomationDisabled() {
+boolean getIsAutomationDisabled() {
 	def dis = state?.autoDisabled
 	return (dis != null && dis == true) ? true : false
 }
@@ -1111,7 +1112,7 @@ def getMaxTemp(tbl1, tbl2=null, tbl3=null, tbl4=null) {
 }
 
 
-def getEDeviceTile(devNum="", dev) {
+String getEDeviceTile(devNum="", dev) {
 	//def obs = getApiXUData(dev)
 //	try {
 		if (state?."TtempTbl${dev.id}"?.size() <= 0 ||
@@ -1119,8 +1120,8 @@ def getEDeviceTile(devNum="", dev) {
 			return hideChartHtml() // hideWeatherHtml()
 		}
 //Logger("W1")
-		def updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
-		def clientBl = state?.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
+		String updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
+		String clientBl = state?.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
 
 		def temperature
 		def level
@@ -1228,7 +1229,7 @@ def getEDeviceTile(devNum="", dev) {
 */
 
 String getDataString(Integer seriesIndex, dev) {
-	def dataString = ""
+	String dataString = ""
 	def dataTable = []
 	switch (seriesIndex) {
 		case 1:
@@ -1246,18 +1247,18 @@ String getDataString(Integer seriesIndex, dev) {
 	return dataString
 }
 
-def historyGraphHtml(devNum="", dev) {
+String historyGraphHtml(devNum="", dev) {
 //Logger("HistoryG 1")
-	def html = ""
+	String html = ""
 	if(true) {
 		if (state?."TtempTbl${dev.id}"?.size() > 0 && state?."TEnergyTbl${dev.id}"?.size() > 0) {
-			def tempStr = getTempUnitStr()
+			String tempStr = getTempUnitStr()
 			def minval = getMinTemp("TtempTbl${dev.id}")
-			def minstr = "minValue: ${minval},"
+			String minstr = "minValue: ${minval},"
 //Logger("HistoryG 1a")
 
 			def maxval = getMaxTemp("TtempTbl${dev.id}")
-			def maxstr = "maxValue: ${maxval},"
+			String maxstr = "maxValue: ${maxval},"
 //Logger("HistoryG 1b")
 
 			def differ = maxval - minval
@@ -1361,10 +1362,10 @@ def hideWeatherHtml() {
 */
 
 
-def wantMetric() { return (getTemperatureScale() == "C") }
+boolean wantMetric() { return (getTemperatureScale() == "C") }
 
-def getTempUnitStr() {
-	def tempStr = "\u00b0F"
+String getTempUnitStr() {
+	String tempStr = "\u00b0F"
 	if ( wantMetric() ) {
 		tempStr = "\u00b0C"
 	}
@@ -1380,12 +1381,12 @@ def getTimeZone() {
 	return tz
 }
 
-def getDtNow() {
+String getDtNow() {
 	def now = new Date()
 	return formatDt(now)
 }
 
-def formatDt(dt) {
+String formatDt(dt) {
 	def tf = new SimpleDateFormat("E MMM dd HH:mm:ss z yyyy")
 	if(getTimeZone()) { tf.setTimeZone(getTimeZone()) }
 	else {
@@ -1394,15 +1395,15 @@ def formatDt(dt) {
 	return tf.format(dt)
 }
 
-def GetTimeDiffSeconds(strtDate, stpDate=null, methName=null) {
+def GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=null) {
 	//LogTrace("[GetTimeDiffSeconds] StartDate: $strtDate | StopDate: ${stpDate ?: "Not Sent"} | MethodName: ${methName ?: "Not Sent"})")
 	if((strtDate && !stpDate) || (strtDate && stpDate)) {
 		//if(strtDate?.contains("dtNow")) { return 10000 }
 		def now = new Date()
-		def stopVal = stpDate ? stpDate.toString() : formatDt(now)
-		def start = Date.parse("E MMM dd HH:mm:ss z yyyy", strtDate).getTime()
-		def stop = Date.parse("E MMM dd HH:mm:ss z yyyy", stopVal).getTime()
-		def diff = (int) (long) (stop - start) / 1000
+		String stopVal = stpDate ? stpDate.toString() : formatDt(now)
+		long start = Date.parse("E MMM dd HH:mm:ss z yyyy", strtDate).getTime()
+		long stop = Date.parse("E MMM dd HH:mm:ss z yyyy", stopVal).getTime()
+		int diff = (int) (long) (stop - start) / 1000
 		LogTrace("[GetTimeDiffSeconds] Results for '$methName': ($diff seconds)")
 		return diff
 	} else { return null }
@@ -1413,31 +1414,31 @@ def GetTimeDiffSeconds(strtDate, stpDate=null, methName=null) {
 |									LOGGING AND Diagnostic									|
 *************************************************************************************************/
 
-def LogTrace(msg, logSrc=null) {
-	def trOn = (showDebug && advAppDebug) ? true : false
+void LogTrace(String msg, String logSrc=null) {
+	boolean trOn = (showDebug && advAppDebug) ? true : false
 	if(trOn) {
 		Logger(msg, "trace", logSrc)
 	}
 }
 
-def LogAction(msg, type=null, showAlways=false, logSrc=null) {
-	def myType = type ?: "debug"
-	def isDbg = showDebug ? true : false
+void LogAction(String msg, String type=null, boolean showAlways=false, String logSrc=null) {
+	String myType = type ?: "debug"
+	boolean isDbg = showDebug ? true : false
 	if(showAlways || isDbg) { Logger(msg, myType, logSrc) }
 }
 
-def Logger(msg, type=null, logSrc=null, noLog=false) {
-	def myType = type ?: "debug"
+void Logger(String msg, String type=null, String logSrc=null, boolean noLog=false) {
+	String myType = type ?: "debug"
 	if(!noLog) {
-		if(msg && type) {
-			def labelstr = ""
+		if(msg && myType) {
+			String labelstr = ""
 			if(state?.dbgAppndName == null) {
 				def tval = settings?.dbgAppndName
 				state?.dbgAppndName = (tval || tval == null) ? true : false
 			}
-			def t0 = app.label
+			String t0 = app.label
 			if(state?.dbgAppndName) { labelstr = "${app.label} | " }
-			def themsg = "${labelstr}${msg}"
+			String themsg = "${labelstr}${msg}"
 			//log.debug "Logger remDiagTest: $msg | $type | $logSrc"
 			switch(myType) {
 				case "debug":
