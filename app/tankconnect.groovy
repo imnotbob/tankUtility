@@ -12,7 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	July 30, 2019
+ *	April 24, 2020
  */
 
 import groovy.json.*
@@ -32,6 +32,8 @@ definition(
 	singleInstance: true
 )
 
+static String appVersion() { "0.0.3" }
+
 preferences {
 	page(name: "settings", title: "Settings", content: "settingsPage", install:true)
 }
@@ -41,36 +43,36 @@ mappings {
 	path("/getTile/:dni")   {action: [GET: "getTile"]}
 }
 
-private static String TankUtilAPIEndPoint() { return "https://data.tankutility.com" }
-private static String TankUtilityDataEndPoint() { return TankUtilAPIEndPoint() }
-private static getChildName() { return "Tank Utility" }
+private static String TankUtilAPIEndPoint(){ return "https://data.tankutility.com" }
+private static String TankUtilityDataEndPoint(){ return TankUtilAPIEndPoint() }
+private static getChildName(){ return "Tank Utility" }
 
-void installed() {
+void installed(){
 	log.info "Installed with settings: ${settings}"
 	initialize()
 }
 
-void updated() {
+void updated(){
 	log.info "Updated with settings: ${settings}"
 	initialize()
 }
 
-void uninstalled() {
+void uninstalled(){
 	def todelete = getAllChildDevices()
 	todelete.each { deleteChildDevice(it.deviceNetworkId) }
 }
 
-void initialize() {
+void initialize(){
 	LogTrace("initialize")
 
 	settingUpdate("showDebug", "true", "bool")
-	boolean traceWasOn = false
-	if(settings?.advAppDebug) {
+	Boolean traceWasOn = false
+	if(settings.advAppDebug){
 		traceWasOn = true
 	}
 	settingUpdate("advAppDebug", "true", "bool")
 
-	if(!state?.autoTyp) { state.autoTyp = "chart" }
+	if(!state.autoTyp){ state.autoTyp = "chart" }
 	unsubscribe()
 	unschedule()
 
@@ -79,31 +81,31 @@ void initialize() {
 
 	setAutomationStatus()
 
-	def devs = getDevices()
-	def devicestatus = RefreshDeviceStatus()
-	boolean quickOut = false
-	devs.each { dev ->
-		def ChildName = getChildName()
-		def TUDeviceID = dev
-		def dni = getDeviceDNI(TUDeviceID)
-		def devinfo = devicestatus[TUDeviceID]
+	List devs = getDevices()
+	Map devicestatus = RefreshDeviceStatus()
+	Boolean quickOut = false
+	devs.each { String dev ->
+		String ChildName = getChildName()
+		String TUDeviceID = dev
+		String dni = getDeviceDNI(TUDeviceID)
+		Map devinfo = devicestatus[TUDeviceID]
 		def d = getChildDevice(dni)
-		if(!d) {
+		if(!d){
 			d = addChildDevice("imnotbob", ChildName, dni, null, ["label": devinfo.name ?: ChildName])
 			LogAction("created ${d.displayName} with dni: ${dni}", "info", true)
 			runIn(5, "updated", [overwrite: true])
 			quickOut = true
 			return
-		} else {
+		}else{
 		}
-		if(d) {
+		if(d){
 			LogAction("device for ${d.displayName} with dni ${dni} found", "info", true)
 			subscribe(d, "energy", automationGenericEvt)
 			subscribe(d, "temperature", automationGenericEvt)
 		}
 		return d
 	}
-	if(quickOut) { return } // we'll be back with runIn after devices settle
+	if(quickOut){ return } // we'll be back with runIn after devices settle
 
 	subscribe(location, "sunrise", automationGenericEvt)
 
@@ -111,7 +113,7 @@ void initialize() {
 
 	scheduleAutomationEval(30)
 
-	if(!traceWasOn) {
+	if(!traceWasOn){
 		settingUpdate("advAppDebug", "false", "bool")
 	}
 	runIn(1800, logsOff, [overwrite: true])
@@ -120,40 +122,41 @@ void initialize() {
 }
 
 private settingsPage(){
-	if(!state?.access_token) { getAccessToken() }
-	if(!state?.access_token) { enableOauth(); getAccessToken() }
+	if(!state.access_token){ getAccessToken() }
+	if(!state.access_token){ enableOauth(); getAccessToken() }
 
-	return dynamicPage(name: "settings", title: "Settings", nextPage: "", uninstall:true, install:true) {
-	 	def message = getToken()
-		if(!(message == true)){
-			section("Authentication") {
-				paragraph "${message}. Enter your TankUtility Username and Password."
+	return dynamicPage(name: "settings", title: "Settings", nextPage: "", uninstall:true, install:true){
+	 	Boolean message = getToken()
+		if(!message){
+			section("Authentication"){
+				paragraph "${state.lastErr} Enter your TankUtility Username and Password."
 				input "UserName", "string", title: "Tank Utility Username", required: true
 				input "Password", "string", title: "Tank Utility Password", required: true, submitOnChange: true
 			}
-		} else {
-			section("Authentication") {
+		}else{
+			section("Authentication"){
 				paragraph "Authentication Succeeded!"
 			}
 
-			section() {
-				def devs = state.devices
-				if(!devs) {
+			section(){
+				List devs = state.devices
+				if(!devs){
 					devs = getDevices()
-					def devicestatus = RefreshDeviceStatus()
+					Map devicestatus = RefreshDeviceStatus()
 				}
 				String t1 = ""
 				t1 = devs?.size() ? "Status\n • Tanks (${devs.size()})" : ""
-				if(devs?.size() > 1) {
-					def myUrl = getAppEndpointUrl("deviceTiles")
-					def myStr = """ <a href="${myUrl}" target="_blank">All Tanks</a> """
+				if(devs?.size() > 1){
+					String myUrl = getAppEndpointUrl("deviceTiles")
+					String myLUrl = getLocalEndpointUrl("deviceTiles")
+					String myStr = """ <a href="${myUrl}" target="_blank">All Tanks</a>   <a href="${myLUrl}" target="_blank">(local)</a>"""
 					paragraph imgTitle(getAppImg("graph_icon.png"), paraTitleStr(myStr))
 				}
 				devs.each { dev ->
-					def deviceid = dev
-					def dni = getDeviceDNI(deviceid)
+					String deviceid = dev
+					String dni = getDeviceDNI(deviceid)
 					def d1 = getChildDevice(dni)
-					if(!d1) { return }
+					if(!d1){ return }
 // Likely should let someone select which tanks are created here.
 /*
 					def deviceData = state.deviceData
@@ -171,49 +174,49 @@ private settingsPage(){
 						['lastreading': lastReadTime],
 						]
 */
-					def sUrl = "${fullApiServerUrl("")}"
-					def myUrl = "${sUrl}" + "/getTile/${dni}" + "?access_token=${state.access_token}"
-//Logger("mainAuto sUrl: ${sUrl}   myUrl: ${myUrl}")
-					def myStr = """ <a href="${myUrl}" target="_blank">${d1.label ?: d1.name}</a> """
+					String myUrl = getAppEndpointUrl("getTile/"+dni)
+					String myLUrl = getLocalEndpointUrl("getTile/"+dni)
+//Logger("mainAuto  myUrl: ${myUrl} myLUrl: ${myLUrl}")
+					String myStr = """ <a href="${myUrl}" target="_blank">${d1.label ?: d1.name}</a> <a href="${myLUrl}" target="_blank">(local)</a>"""
 					paragraph imgTitle(getAppImg("graph_icon.png"), paraTitleStr(myStr))
 				}
 			}
-
-			section(sectionTitleStr("Automation Options:")) {
-				input "autoDisabledreq", "bool", title: imgTitle(getAppImg("disable_icon2.png"), inputTitleStr("Disable this Automation?")), required: false, defaultValue: false /* state?.autoDisabled */, submitOnChange: true
-				setAutomationStatus()
-
-				input("showDebug", "bool", title: imgTitle(getAppImg("debug_icon.png"), inputTitleStr("Debug Option")), description: "Show ${app?.name} Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true)
-				if(showDebug) {
-					input("advAppDebug", "bool", title: imgTitle(getAppImg("list_icon.png"), inputTitleStr("Show Verbose Logs?")), required: false, defaultValue: false, submitOnChange: true)
-				} else {
-					settingUpdate("advAppDebug", "false", "bool")
-				}
-			}
-			section(sectionTitleStr("Application Security")) {
-				paragraph title:"What does resetting do?", "If you share a url with someone and want to remove their access you can reset your token and this will invalidate any URL you shared and create a new one for you.  This will require any use in dashboards to be updated to the new URL."
-				input (name: "resetAppAccessToken", type: "bool", title: "Reset Access Token?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("reset_icon.png"))
-				resetAppAccessToken(settings?.resetAppAccessToken == true)
-			}
-/*
-			section(sectionTitleStr("Automation Name:")) {
-				def newName = getAutoTypeLabel()
-				if(!app?.label) { app?.updateLabel("${newName}") }
-				label title: imgTitle(getAppImg("name_tag_icon.png"), inputTitleStr("Label this Automation: Suggested Name: ${newName}")), defaultValue: "${newName}", required: true //, wordWrap: true
-				if(!state?.isInstalled) {
-					paragraph "Make sure to name it something that you can easily recognize."
-				}
-			}
-*/
 		}
+
+		section(sectionTitleStr("Automation Options:")){
+			input "autoDisabledreq", "bool", title: imgTitle(getAppImg("disable_icon2.png"), inputTitleStr("Disable this Automation?")), required: false, defaultValue: false /* state.autoDisabled */, submitOnChange: true
+			setAutomationStatus()
+
+			input("showDebug", "bool", title: imgTitle(getAppImg("debug_icon.png"), inputTitleStr("Debug Option")), description: "Show ${app?.name} Logs in the IDE?", required: false, defaultValue: false, submitOnChange: true)
+			if(showDebug){
+				input("advAppDebug", "bool", title: imgTitle(getAppImg("list_icon.png"), inputTitleStr("Show Verbose Logs?")), required: false, defaultValue: false, submitOnChange: true)
+			}else{
+				settingUpdate("advAppDebug", "false", "bool")
+			}
+		}
+		section(sectionTitleStr("Application Security")){
+			paragraph title:"What does resetting do?", "If you share a url with someone and want to remove their access you can reset your token and this will invalidate any URL you shared and create a new one for you.  This will require any use in dashboards to be updated to the new URL."
+			input (name: "resetAppAccessToken", type: "bool", title: "Reset Access Token?", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("reset_icon.png"))
+			resetAppAccessToken(settings.resetAppAccessToken == true)
+		}
+/*
+		section(sectionTitleStr("Automation Name:")){
+			def newName = getAutoTypeLabel()
+			if(!app?.label){ app?.updateLabel("${newName}") }
+			label title: imgTitle(getAppImg("name_tag_icon.png"), inputTitleStr("Label this Automation: Suggested Name: ${newName}")), defaultValue: "${newName}", required: true //, wordWrap: true
+			if(!state.isInstalled){
+				paragraph "Make sure to name it something that you can easily recognize."
+			}
+		}
+*/
 	}
 }
 
-private getDevices() {
+List getDevices(){
 	LogTrace("getDevices")
-	def devices = []
+	List devices = []
 
-	if( !(getToken() == true)) {
+	if(!getToken()){
 		LogAction("getDevice: no token available", "info", true)
 		return devices
 	}
@@ -226,44 +229,44 @@ private getDevices() {
 	]
 	
 	try {
-		httpGet(Params) { resp ->
-			if(resp.status == 200) {	
+		httpGet(Params){ resp ->
+			if(resp.status == 200){	
 				resp.data.devices.each { dev ->
-					def dni = [app.id, dev].join('.')
+					String dni = [app.id, dev].join('.')
 					LogAction("Found device ID: ${dni}", "debug", false)
 					devices += dev
 				}
-			} else {
+			}else{
 				LogAction("Error from Tank Utility in getDevices - Return Code: ${resp.status} | Response: ${resp.data}", "error", true)
 				state.APIToken = null
-				state.APITokenExpirationTime = 0
+				state.APITokenExpirationTime = 0L
 			}
 		}
 		state.devices = devices
-	} catch (e) {
+	} catch (e){
 		log.error "Error in getDevices: $e"
 		state.APIToken = null
-		state.APITokenExpirationTime = 0
+		state.APITokenExpirationTime = 0L
 	}
 	return devices
 }
 
-private RefreshDeviceStatus() {
+private Map RefreshDeviceStatus(){
 	LogTrace("RefreshDeviceStatus()")
-	def deviceData = [:]
+	Map deviceData = [:]
 
-	if( !(getToken() == true)) {
+	if(!getToken()){
 		LogAction("RefreshDeviceStatus: no token available", "info", true)
 		return deviceData
 	}
-	def devices = state?.devices
-	if(!devices) {
+	List devices = state.devices
+	if(!devices){
 		LogAction("RefreshDeviceState: no devices avaiable", "warn", true)
 		return deviceData
 	}
 
-	devices.each {dev ->
-		def dni = getDeviceDNI(dev)
+	devices.each {String dev ->
+		String dni = getDeviceDNI(dev)
 		def Params = [
 			uri: TankUtilityDataEndPoint(),
 			path: "/api/devices/${dev}",
@@ -272,61 +275,61 @@ private RefreshDeviceStatus() {
 			],
 		]
 		try {
-			httpGet(Params) { resp ->
-				if(resp.status == 200) {	
+			httpGet(Params){ resp ->
+				if(resp.status == 200){	
 					deviceData[dev] = resp.data.device
 					LogTrace("RefreshDeviceStatus: received device data for ${dev} = ${deviceData[dev]}")
-				} else {
+				}else{
 					LogAction("RefreshDeviceStatus: Error while receiving events ${resp.status}", "error", true)
 					state.APIToken = null
-					state.APITokenExpirationTime = 0
+					state.APITokenExpirationTime = 0L
 				}
 			}
 	
-		} catch (e) {
+		} catch (e){
 			log.error "Error while processing events for RefreshDeviceStatus ${e}"
 			state.APIToken = null
-			state.APITokenExpirationTime = 0
+			state.APITokenExpirationTime = 0L
 		}
 	}
 	state.deviceData = deviceData
 	return deviceData
 }
 
-private getToken() {
+private Boolean getToken(){
 	LogTrace("getToken()")
-	def message = true
-	if(!settings?.UserName || !settings?.Password) {
+	Boolean message = true
+	if(!settings.UserName || !settings.Password){
 		LogAction("getToken no password", "warn", false)
-		return ""
+		return false
 	 }
-	if (isTokenExpired() || !state?.APIToken) {
-		LogTrace("API token expired at ${state?.APITokenExpirationTime}. Refreshing API Token")
+	if (isTokenExpired() || !state.APIToken){
+		LogTrace("API token expired at ${state.APITokenExpirationTime}. Refreshing API Token")
 		message = getAPIToken()
-		if(!(message == true)){
-			log.warn "Was not able to refresh API token expired at ${state?.APITokenExpirationTime}."
+		if(!message){
+			log.warn "getToken $message  Was not able to refresh API token expired at ${state.APITokenExpirationTime}."
 		}
 	} 
 	return message
 }
 
-private isTokenExpired() {
-	def currentDate = now()
-	if (state?.APITokenExpirationTime == null) {
+Boolean isTokenExpired(){
+	Long currentDate = now()
+	if (!state.APITokenExpirationTime){
 		return true
-	} else {
-		def ExpirationDate = state?.APITokenExpirationTime
-		if (currentDate >= ExpirationDate) {return true} else {return false}
+	}else{
+		Long ExpirationDate = state.APITokenExpirationTime
+		if (currentDate >= ExpirationDate){return true}else{return false}
 	}
 }
 
-private String getBase64AuthString() {
+private String getBase64AuthString(){
 	String authorize = "${settings.UserName}:${settings.Password}"
 	String authorize_encoded = authorize.bytes.encodeBase64()
 	return authorize_encoded
 }
 
-private getAPIToken() {
+private Boolean getAPIToken(){
 	log.trace "getAPIToken()Requesting an API Token!"
 	def Params = [
 		uri: TankUtilAPIEndPoint(),
@@ -335,57 +338,60 @@ private getAPIToken() {
 	]
 
 	try {
-		httpGet(Params) { resp ->
+		httpGet(Params){ resp ->
 			LogAction("getToken Return Code: ${resp.status} Response: ${resp.data}", "debug", false)
-			if(resp.status == 200) {
-				if (resp.data.token) {
+			if(resp.status == 200){
+				if (resp.data.token){
 					state.APIToken = resp?.data?.token
-					state.APITokenExpirationTime = now() + (24 * 60 * 60 * 1000)
+					state.APITokenExpirationTime = now() + (24L * 60 * 60 * 1000)
 					LogAction("Token refresh Success. Token expires at ${state.APITokenExpirationTime}", "info", false)
+					state.lastErr=""
 					return true
 				} 
 			}
-			state.APIToken = null
-			state.APITokenExpirationTime = 0
-			return resp.data.error
+			state.lastErr="Was not able to refresh API token ${resp.data.error}"
 		}
-	} catch (e) {
-		log.error "Error in the getAPIToken method: $e"
+	} catch (e){
+		state.lastErr="Error in the getAPIToken method: $e"
+	}
+	if(state.lastErr){
+		log.error "returning false getAPIToken ${state.lastErr}"
 		state.APIToken = null
-		state.APITokenExpirationTime = 0
+		state.APITokenExpirationTime = 0L
 		return false
 	}
+	return true
 }
 
-def pollChildren(updateData=true){
-	long execTime = now()
+void pollChildren(Boolean updateData=true){
+	Long execTime = now()
 	LogTrace("pollChildren")
-	if( !(getToken() == true)) {
+	if(!getToken()){
 		LogAction("pollChilcren: Was not able to refresh API token expired at ${state.APITokenExpirationTime}.", "warn", true)
 		return
 	}
-	def devices = state.devices
-	if(!devices) {
+	List devices = state.devices
+	if(!devices){
 		LogAction("pollChilcren: no devices available", "warn", true)
 		return
 	}
-	def deviceData
-	if(updateData) {
+	Map deviceData
+	if(updateData){
 		deviceData = RefreshDeviceStatus()
-	} else {
+	}else{
 		deviceData = state.deviceData
 	}
 	devices.each {dev ->
 		try {
-			def deviceid = dev
-			def dni = getDeviceDNI(deviceid)
+			String deviceid = dev
+			String dni = getDeviceDNI(deviceid)
 			def d = getChildDevice(dni)
-			if(!d) {
+			if(!d){
 				LogAction("pollChilcren: no device found $dni", "warn", true)
 				return false
 			}
 			def devData = deviceData[deviceid]
-			if(!devData) {
+			if(!devData){
 				LogAction("pollChilcren: no device data available $d.label", "warn", true)
 				return false
 			}
@@ -406,204 +412,204 @@ def pollChildren(updateData=true){
 				event -> d.generateEvent(event)
 			}
 			LogTrace("pollChildren: sent device data for ${deviceid} = ${devData}")
-		} catch (e) {
+		} catch (e){
 			log.error "pollChildren: Error while sending  events for pollChildren: ${e}"
 		}
 	}
 	storeExecutionHistory((now()-execTime), "pollChildren")
 }
 
-def getDeviceDNI(DeviceID) {
+String getDeviceDNI(String DeviceID){
 	return [app.id, DeviceID].join('.')
 }
 
-String strCapitalize(str) {
+static String strCapitalize(str){
 	return str ? str?.toString().capitalize() : null
 }
 
-def automationGenericEvt(evt) {
-	long startTime = now()
-	long eventDelay = startTime - evt.date.getTime()
+void automationGenericEvt(evt){
+	Long startTime = now()
+	Long eventDelay = startTime - evt.date.getTime()
 	LogAction("${evt?.name.toUpperCase()} Event | Device: ${evt?.displayName} | Value: (${strCapitalize(evt?.value)}) with a delay of ${eventDelay}ms", "info", false)
 
 	doTheEvent(evt)
 }
 
-def doTheEvent(evt) {
-	if(getIsAutomationDisabled()) { return }
+void doTheEvent(evt){
+	if(getIsAutomationDisabled()){ return }
 	else {
 		scheduleAutomationEval()
 		storeLastEventData(evt)
 	}
 }
 
-def storeLastEventData(evt) {
-	if(evt) {
+void storeLastEventData(evt){
+	if(evt){
 		def newVal = ["name":evt.name, "displayName":evt.displayName, "value":evt.value, "date":formatDt(evt.date), "unit":evt.unit]
-		state?.lastEventData = newVal
-		//log.debug "LastEvent: ${state?.lastEventData}"
+		state.lastEventData = newVal
+		//log.debug "LastEvent: ${state.lastEventData}"
 
-		def list = state?.detailEventHistory ?: []
-		int listSize = 10
-		if(list?.size() < listSize) {
+		List list = state.detailEventHistory ?: []
+		Integer listSize = 10
+		if(list?.size() < listSize){
 			list.push(newVal)
 		}
-		else if(list?.size() > listSize) {
-			int nSz = (list?.size()-listSize) + 1
-			def nList = list?.drop(nSz)
+		else if(list?.size() > listSize){
+			Integer nSz = (list?.size()-listSize) + 1
+			List nList = list?.drop(nSz)
 			nList?.push(newVal)
 			list = nList
 		}
-		else if(list?.size() == listSize) {
-			def nList = list?.drop(1)
+		else if(list?.size() == listSize){
+			List nList = list?.drop(1)
 			nList?.push(newVal)
 			list = nList
 		}
-		if(list) { state?.detailEventHistory = list }
+		if(list){ state.detailEventHistory = list }
 	}
 }
 
-void storeExecutionHistory(val, String method = null) {
+void storeExecutionHistory(val, String method = null){
 	//log.debug "storeExecutionHistory($val, $method)"
 	//try {
-		if(method) {
+		if(method){
 			LogTrace("${method} Execution Time: (${val} milliseconds)")
 		}
-		if(method in ["watchDogCheck", "checkNestMode", "schMotCheck"]) {
-			state?.autoExecMS = val ?: null
-			def list = state?.evalExecutionHistory ?: []
-			int listSize = 20
+		if(method in ["watchDogCheck", "checkNestMode", "schMotCheck"]){
+			state.autoExecMS = val ?: null
+			List list = state.evalExecutionHistory ?: []
+			Integer listSize = 20
 			list = addToList(val, list, listSize)
-			if(list) { state?.evalExecutionHistory = list }
+			if(list){ state.evalExecutionHistory = list }
 		}
-		//if(!(method in ["watchDogCheck", "checkNestMode"])) {
-			def list = state?.detailExecutionHistory ?: []
-			int listSize = 15
+		//if(!(method in ["watchDogCheck", "checkNestMode"])){
+			List list = state.detailExecutionHistory ?: []
+			Integer listSize = 15
 			list = addToList([val, method, getDtNow()], list, listSize)
-			if(list) { state?.detailExecutionHistory = list }
+			if(list){ state.detailExecutionHistory = list }
 		//}
 /*
-	} catch (ex) {
+	} catch (ex){
 		log.error "storeExecutionHistory Exception:", ex
 		//parent?.sendExceptionData(ex, "storeExecutionHistory", true, getAutoType())
 	}
 */
 }
 
-def addToList(val, list, int listSize) {
-	if(list?.size() < listSize) {
+List addToList(val, list, Integer listSize){
+	if(list?.size() < listSize){
 		list.push(val)
-	} else if(list?.size() > listSize) {
-		int nSz = (list?.size()-listSize) + 1
-		def nList = list?.drop(nSz)
+	} else if(list?.size() > listSize){
+		Integer nSz = (list?.size()-listSize) + 1
+		List nList = list?.drop(nSz)
 		nList?.push(val)
 		list = nList
-	} else if(list?.size() == listSize) {
-		def nList = list?.drop(1)
+	} else if(list?.size() == listSize){
+		List nList = list?.drop(1)
 		nList?.push(val)
 		list = nList
 	}
 	return list
 }
 
-def defaultAutomationTime() {
+static Integer defaultAutomationTime(){
 	return 5
 }
 
-def scheduleAutomationEval(schedtime = defaultAutomationTime()) {
-	def theTime = schedtime
-	if(theTime < defaultAutomationTime()) { theTime = defaultAutomationTime() }
+def scheduleAutomationEval(Integer schedtime = defaultAutomationTime()){
+	Integer theTime = schedtime
+	if(theTime < defaultAutomationTime()){ theTime = defaultAutomationTime() }
 	String autoType = getAutoType()
 	def random = new Random()
-	int random_int = random.nextInt(6)  // this randomizes a bunch of automations firing at same time off same event
-	boolean waitOverride = false
-	switch(autoType) {
+	Integer random_int = random.nextInt(6)  // this randomizes a bunch of automations firing at same time off same event
+	Boolean waitOverride = false
+	switch(autoType){
 		case "chart":
-			if(theTime == defaultAutomationTime()) {
+			if(theTime == defaultAutomationTime()){
 				theTime += random_int
 			}
-			int schWaitVal = settings?.schMotWaitVal?.toInteger() ?: 60
-			if(schWaitVal > 120) { schWaitVal = 120 }
-			int t0 = getAutoRunSec()
-			if((schWaitVal - t0) >= theTime ) {
+			Integer schWaitVal = settings.schMotWaitVal?.toInteger() ?: 60
+			if(schWaitVal > 120){ schWaitVal = 120 }
+			Integer t0 = getAutoRunSec()
+			if((schWaitVal - t0) >= theTime ){
 				theTime = (schWaitVal - t0)
 				waitOverride = true
 			}
 			//theTime = Math.min( Math.max(theTime,defaultAutomationTime()), 120)
 			break
 	}
-	if(!state?.evalSched) {
+	if(!state.evalSched){
 		runIn(theTime, "runAutomationEval", [overwrite: true])
-		state?.autoRunInSchedDt = getDtNow()
+		state.autoRunInSchedDt = getDtNow()
 		state.evalSched = true
 		state.evalSchedLastTime = theTime
-	} else {
+	}else{
 		String str = "scheduleAutomationEval: "
-		def t0 = state?.evalSchedLastTime
-		if(t0 == null) { t0 = 0 }
-		int timeLeftPrev = t0 - getAutoRunInSec()
-		if(timeLeftPrev < 0) { timeLeftPrev = 100 }
+		Integer t0 = state.evalSchedLastTime
+		if(t0 == null){ t0 = 0 }
+		Integer timeLeftPrev = t0 - getAutoRunInSec()
+		if(timeLeftPrev < 0){ timeLeftPrev = 100 }
 		String str1 = " Schedule change: from (${timeLeftPrev}sec) to (${theTime}sec)"
-		if(timeLeftPrev > (theTime + 5) || waitOverride) {
-			if(Math.abs(timeLeftPrev - theTime) > 3) {
+		if(timeLeftPrev > (theTime + 5) || waitOverride){
+			if(Math.abs(timeLeftPrev - theTime) > 3){
 				runIn(theTime, "runAutomationEval", [overwrite: true])
-				state?.autoRunInSchedDt = getDtNow()
+				state.autoRunInSchedDt = getDtNow()
 				state.evalSched = true
 				state.evalSchedLastTime = theTime
 				LogTrace("${str}Performing${str1}")
 			}
-		} else { LogTrace("${str}Skipping${str1}") }
+		}else{ LogTrace("${str}Skipping${str1}") }
 	}
 }
 
 
-int getAutoRunSec() { return !state?.autoRunDt ? 100000 : GetTimeDiffSeconds(state?.autoRunDt, null, "getAutoRunSec").toInteger() }
+Integer getAutoRunSec(){ return !state.autoRunDt ? 100000 : GetTimeDiffSeconds(state.autoRunDt, null, "getAutoRunSec").toInteger() }
 
-int getAutoRunInSec() { return !state?.autoRunInSchedDt ? 100000 : GetTimeDiffSeconds(state?.autoRunInSchedDt, null, "getAutoRunInSec").toInteger() }
+Integer getAutoRunInSec(){ return !state.autoRunInSchedDt ? 100000 : GetTimeDiffSeconds(state.autoRunInSchedDt, null, "getAutoRunInSec").toInteger() }
 
-def runAutomationEval() {
+void runAutomationEval(){
 	LogTrace("runAutomationEval")
-	long execTime = now()
+	Long execTime = now()
 	String autoType = getAutoType()
 	state.evalSched = false
-	state?.evalSchedLastTime = null
-	switch(autoType) {
+	state.evalSchedLastTime = null
+	switch(autoType){
 		case "chart":
-	def devs = state.devices
-	devs.each { dev ->
-		def deviceid = dev
-		def deviceData = state.deviceData
-		def devData = deviceData[deviceid]
-		def LastReading = devData.lastReading
-		def dni = getDeviceDNI(deviceid)
-		def d1 = getChildDevice(dni)
-		def temperature = LastReading.temperature.toInteger()
-		def level = (LastReading.tank).toFloat().round(2)
-//		def lastReadTime = LastReading.time_iso
-//		def capacity = devData.capacity
+			List devs = state.devices
+			devs.each { dev ->
+				String deviceid = dev
+				def deviceData = state.deviceData
+				def devData = deviceData[deviceid]
+				def LastReading = devData.lastReading
+				String dni = getDeviceDNI(deviceid)
+				def d1 = getChildDevice(dni)
+				Integer temperature = LastReading.temperature.toInteger()
+				def level = (LastReading.tank).toFloat().round(2)
+//				def lastReadTime = LastReading.time_iso
+//				def capacity = devData.capacity
 /*
-		def events = [
-			['temperature': temperature],
-			['level': level],
-			['energy': level],
-			['capacity': capacity],
-			['lastreading': lastReadTime],
-			]
+				def events = [
+					['temperature': temperature],
+					['level': level],
+					['energy': level],
+					['capacity': capacity],
+					['lastreading': lastReadTime],
+					]
 */
-		getSomeData(d1, temperature, level)
-	}
+				getSomeData(d1, temperature, level)
+			}
 /*
 			def weather = parent.getSettingVal("weatherDevice")
-			if(weather) {
+			if(weather){
 				getSomeWData(weather)
 			}
 
 			def tstats = parent.getSettingVal("thermostats")
 			def foundTstats
-			if(tstats) {
+			if(tstats){
 				foundTstats = tstats?.collect { dni ->
 					def d1 = parent.getDevice(dni)
-					if(d1) {
+					if(d1){
 						//LogAction("Found: ${d1?.displayName} with (Id: ${dni})", "debug", false)
 						getSomeData(d1)
 					}
@@ -613,11 +619,11 @@ def runAutomationEval() {
 
 			def vtstats = parent.getStateVal("vThermostats")
 			def foundvTstats
-			if(tvstats) {
+			if(tvstats){
 				foundvTstats = vtstats?.collect { dni ->
 					def mydni = parent.getNestvStatDni(dni).toString()
 					def d1 = parent.getDevice(mydni)
-					if(d1) {
+					if(d1){
 						//LogAction("Found: ${d1?.displayName} with (Id: ${mydni})", "debug", false)
 						getSomeData(d1)
 					}
@@ -634,98 +640,97 @@ def runAutomationEval() {
 }
 
 
-def getSomeData(dev, temperature, level) {
+def getSomeData(dev, temperature, level){
 	LogAction("getSomeData: ${temperature} ${level}", "info", false)
-	if (state?."TtempTbl${dev.id}" == null) {
+	if (state."TtempTbl${dev.id}" == null){
 		state."TtempTbl${dev.id}" = []
 		state."TEnergyTbl${dev.id}" = []
 	}
 
-	List tempTbl = state?."TtempTbl${dev.id}"
-	List energyTbl = state?."TEnergyTbl${dev.id}"
+	List tempTbl = state."TtempTbl${dev.id}"
+	List energyTbl = state."TEnergyTbl${dev.id}"
 
-	def newDate = new Date()
-	if(newDate == null) { Logger("got null for new Date()") }
+	Date newDate = new Date()
+	if(newDate == null){ Logger("got null for new Date()") }
 
-	int dayNum = newDate.format("D", location.timeZone) as Integer
+	Integer dayNum = newDate.format("D", location.timeZone) as Integer
 //	def hr = newDate.format("H", location.timeZone) as Integer
 //	def mins = newDate.format("m", location.timeZone) as Integer
 
 	state."TtempTbl${dev.id}" =	addValue(tempTbl, dayNum, temperature)
 	state."TEnergyTbl${dev.id}" =	addValue(energyTbl, dayNum, level)
-
 }
 
-def addValue(List table, int dayNum, val) {
-	def newTable = table
-	if(table?.size()) {
-		def lastDay = table.last()[0]
+List addValue(List table, Integer dayNum, val){
+	List newTable = table
+	if(table?.size()){
+		Integer lastDay = table.last()[0]
 /*
 		def last = table.last()[1]
 		def secondtolast
-		if(table?.size() > 1) {
+		if(table?.size() > 1){
 			secondtolast = table[-2][1]
 		}
 */
-		if(lastDay == dayNum /* || (val == last && val == secondtolast)*/ ) {
+		if(lastDay == dayNum /* || (val == last && val == secondtolast)*/ ){
 			newTable = table.take(table.size() - 1)
 		}
 	}
 	newTable.add([dayNum, val])
-	while(newTable.size() > 365) { newTable.removeAt(0) }
+	while(newTable.size() > 365){ newTable.removeAt(0) }
 	return newTable
 }
 
 
-def getTile() {
+def getTile(){
 	LogTrace ("getTile()")
 	String responseMsg = ""
 
 	String dni = "${params?.dni}"
-	if (dni) {
+	if (dni){
 		def device = getChildDevice(dni)
 //		def device = parent.getDevice(dni)
-		if (device) {
+		if (device){
 			return renderDeviceTiles(null, device)
-		} else {
+		}else{
 			responseMsg = "Device '${dni}' Not Found"
 		}
-	} else {
+	}else{
 		responseMsg = "Invalid Parameters"
 	}
 	render contentType: "text/html",
 		data: "${responseMsg}"
 }
 
-def renderDeviceTiles(type=null, theDev=null) {
-	long execTime = now()
+def renderDeviceTiles(type=null, theDev=null){
+	Long execTime = now()
 //	try {
 		String devHtml = ""
 		String navHtml = ""
 		String scrStr = ""
 		def allDevices = []
-		if(theDev) {
+		if(theDev){
 			allDevices << theDev
-		} else {
+		}else{
 			allDevices = app.getChildDevices(true)
 		}
 
 
 		def devices = allDevices
-		int devNum = 1
+		Integer devNum = 1
 		String myType = type ?: "All Devices"
 		devices?.sort {it?.getLabel()}.each { dev ->
 			def navMap = [:]
-			boolean hasHtml = true // (dev?.hasHtml() == true)
+			Boolean hasHtml = true // (dev?.hasHtml() == true)
 //Logger("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeName}")
-			if( (dev?.typeName in ["Tank Utility"]) &&
-				( (hasHtml && !type) || (hasHtml && type && dev?.name == type)) ) {
+			if((dev?.typeName in ["Tank Utility"]) &&
+				((hasHtml && !type) || (hasHtml && type && dev?.name == type)) ){
 LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeName}")
 				navMap = ["key":dev?.getLabel(), "items":[]]
 				def navItems = navHtmlBuilder(navMap, devNum)
 				String myTile = getEDeviceTile(devNum, dev) //dev.name == "Nest Thermostat" ? getTDeviceTile(devNum, dev) : getWDeviceTile(devNum, dev)
-				if(navItems?.html) { navHtml += navItems?.html }
-				if(navItems?.js) { scrStr += navItems?.js }
+				if(navItems?.html){ navHtml += navItems?.html }
+				if(navItems?.js){ scrStr += navItems?.js }
 
 				devHtml += """
 				<div class="panel panel-primary" style="max-width: 600px; margin: 30 auto; position: relative;">
@@ -814,10 +819,10 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 				</script>
 				<script src="https://cdn.rawgit.com/tonesto7/nest-manager/master/Documents/js/diagpages.min.js"></script>
 				<script>
-					\$(document).ready(function() {
+					\$(document).ready(function(){
 						${scrStr}
 					});
-					\$("#goHomeBtn").click(function() {
+					\$("#goHomeBtn").click(function(){
 						closeNavMenu();
 						toggleMenuBtn();
 						window.location.replace('${getAppEndpointUrl("deviceTiles")}');
@@ -829,21 +834,21 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 /* """ */
 		storeExecutionHistory((now()-execTime), "renderDeviceTiles")
 		render contentType: "text/html", data: html
-//	} catch (ex) { log.error "renderDeviceData Exception:", ex }
+//	} catch (ex){ log.error "renderDeviceData Exception:", ex }
 }
 
-def navHtmlBuilder(navMap, idNum) {
-	def res = [:]
+Map navHtmlBuilder(navMap, Integer idNum){
+	Map res = [:]
 	String htmlStr = ""
 	String jsStr = ""
-	if(navMap?.key) {
+	if(navMap?.key){
 		htmlStr += """
 			<div class="nav-cont-bord-div nav-menu">
 			  <div class="nav-cont-div">
 				<li class="nav-key-item"><a id="nav-key-item${idNum}">${navMap?.key}<span class="icon"></span></a></li>"""
 		jsStr += navJsBuilder("nav-key-item${idNum}", "key-item${idNum}")
 	}
-	if(navMap?.items) {
+	if(navMap?.items){
 		def nItems = navMap?.items
 		nItems?.each {
 			htmlStr += """\n<li class="nav-subkey-item"><a id="nav-subitem${idNum}-${it?.toString().toLowerCase()}">${it}<span class="icon"></span></a></li>"""
@@ -857,9 +862,9 @@ def navHtmlBuilder(navMap, idNum) {
 	return res
 }
 
-String navJsBuilder(btnId, divId) {
+String navJsBuilder(String btnId, String divId){
 	String res = """
-			\$("#${btnId}").click(function() {
+			\$("#${btnId}").click(function(){
 				\$("html, body").animate({scrollTop: \$("#${divId}").offset().top - hdrHeight - 20},500);
 				closeNavMenu();
 				toggleMenuBtn();
@@ -869,7 +874,7 @@ String navJsBuilder(btnId, divId) {
 }
 
 
-String getWebHeaderHtml(title, clipboard=true, vex=false, swiper=false, charts=false) {
+String getWebHeaderHtml(String title, Boolean clipboard=true, Boolean vex=false, Boolean swiper=false, Boolean charts=false){
 	String html = """
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -908,7 +913,7 @@ String getWebHeaderHtml(title, clipboard=true, vex=false, swiper=false, charts=f
 	return html
 }
 
-String hideChartHtml() {
+String hideChartHtml(){
 	String data = """
 		<div class="swiper-slide">
 			<section class="sectionBg" style="min-height: 250px;">
@@ -924,24 +929,24 @@ String hideChartHtml() {
 	return data
 }
 
-String getAutoType() {
-	return state?.autoTyp ?: null
+String getAutoType(){
+	return state.autoTyp ?: (String)null
 }
 
-String getAutomationType() {
-	return state?.autoTyp ?: null
+String getAutomationType(){
+	return state.autoTyp ?: (String)null
 }
 
-String getAppEndpointUrl(subPath) { return "${getFullApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state?.access_token}" }
-String getLocalEndpointUrl(subPath) { return "${getFullLocalApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state?.access_token}" }
+String getAppEndpointUrl(String subPath){ return "${getFullApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state.access_token}" }
+String getLocalEndpointUrl(String subPath){ return "${getFullLocalApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state.access_token}" }
 
-def getAccessToken() {
+Boolean getAccessToken(){
 	try {
-		if(!state?.access_token) { state?.access_token = createAccessToken() }
+		if(!state.access_token){ state.access_token = createAccessToken() }
 		else { return true }
 	}
-	catch (ex) {
-		def msg = "Error: OAuth is not Enabled for ${app?.name}!."
+	catch (ex){
+		String msg = "Error: OAuth is not Enabled for ${app?.name}!."
 	//	sendPush(msg)
 		log.error "getAccessToken Exception ${ex?.message}"
 		LogAction("getAccessToken Exception | $msg", "warn", true)
@@ -949,46 +954,46 @@ def getAccessToken() {
 	}
 }
 
-def enableOauth() {
+void enableOauth(){
 	def params = [
 			uri: "http://localhost:8080/app/edit/update?_action_update=Update&oauthEnabled=true&id=${app.appTypeId}",
 			headers: ['Content-Type':'text/html;charset=utf-8']
 	]
 	try {
-		httpPost(params) { resp ->
+		httpPost(params){ resp ->
 			//LogTrace("response data: ${resp.data}")
 		}
-	} catch (e) {
+	} catch (e){
 		log.debug "enableOauth something went wrong: ${e}"
 	}
 }
 
-void resetAppAccessToken(reset) {
-	if(reset != true) { return }
+void resetAppAccessToken(Boolean reset){
+	if(!reset){ return }
 	LogAction("Resetting Access Token....", "info", true)
 	//revokeAccessToken()
-	state?.access_token = null
-	state?.accessToken = null
-	if(getAccessToken()) {
+	state.access_token = null
+	state.accessToken = null
+	if(getAccessToken()){
 		LogAction("Reset Access Token... Successful", "info", true)
 		settingUpdate("resetAppAccessToken", "false", "bool")
 	}
 }
 
-String sectionTitleStr(title)	{ return "<h3>$title</h3>" }
-String inputTitleStr(title)	{ return "<u>$title</u>" }
-String pageTitleStr(title)		{ return "<h1>$title</h1>" }
-String paraTitleStr(title)		{ return "<b>$title</b>" }
+static String sectionTitleStr(String title)	{ return '<h3>'+title+'</h3>' }
+static String inputTitleStr(String title)	{ return '<u>'+title+'</u>' }
+static String pageTitleStr(String title)		{ return '<h1>'+title+'</h1>' }
+static String paraTitleStr(String title)		{ return '<b>'+title+'</b>' }
 
-String imgTitle(String imgSrc, String titleStr, String color=null, imgWidth=30, imgHeight=null) {
+static String imgTitle(String imgSrc, String titleStr, String color=null, Integer imgWidth=30, Integer imgHeight=null){
 	String imgStyle = ""
 	imgStyle += imgWidth ? "width: ${imgWidth}px !important;" : ""
 	imgStyle += imgHeight ? "${imgWidth ? " " : ""}height: ${imgHeight}px !important;" : ""
-	if(color) { return """<div style="color: ${color}; font-weight: bold;"><img style="${imgStyle}" src="${imgSrc}"> ${titleStr}</img></div>""" }
+	if(color){ return """<div style="color: ${color}; font-weight: bold;"><img style="${imgStyle}" src="${imgSrc}"> ${titleStr}</img></div>""" }
 	else { return """<img style="${imgStyle}" src="${imgSrc}"> ${titleStr}</img>""" }
 }
 
-String icons(name, napp="App") {
+static String icons(String name, String napp="App"){
 	def icon_names = [
 		"i_dt": "delay_time",
 		"i_not": "notification",
@@ -1006,135 +1011,135 @@ String icons(name, napp="App") {
 	//return icon_names[name]
 	String t0 = icon_names?."${name}"
 	//LogAction("t0 ${t0}", "warn", true)
-	if(t0) return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${t0}_icon.png"
-	else return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${name}"
+	if(t0) return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${t0}_icon.png".toString()
+	else return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${name}".toString()
 }
 
-String gitRepo()	{ return "tonesto7/nest-manager"}
-String gitBranch()	{ return "master" }
-String gitPath()	{ return "${gitRepo()}/${gitBranch()}"}
+static String gitRepo()	{ return "tonesto7/nest-manager"}
+static String gitBranch()	{ return "master" }
+static String gitPath()	{ return "${gitRepo()}/${gitBranch()}"}
 
-String getAppImg(imgName, on = null) {
+String getAppImg(String imgName, Boolean on = null){
 	return (!disAppIcons || on) ? icons(imgName) : ""
 }
 
-String getDevImg(imgName, on = null) {
+String getDevImg(String imgName, Boolean on = null){
 	return (!disAppIcons || on) ? icons(imgName, "Devices") : ""
 }
 
-void logsOff() {
+void logsOff(){
 	Logger("debug logging disabled...")
 	settingUpdate("showDebug", "false", "bool")
 	settingUpdate("advAppDebug", "false", "bool")
 }
 
-void settingUpdate(name, value, type=null) {
+void settingUpdate(String name, value, String type=null){
 	//LogTrace("settingUpdate($name, $value, $type)...")
-	if(name) {
-		if(value == "" || value == null || value == []) {
+	if(name){
+		if(value == "" || value == null || value == []){
 			settingRemove(name)
 			return
 		}
 	}
-	if(name && type) { app?.updateSetting("$name", [type: "$type", value: value]) }
-	else if (name && type == null) { app?.updateSetting(name.toString(), value) }
+	if(name && type){ app?.updateSetting(name, [type: "$type", value: value]) }
+	else if (name && type == null){ app?.updateSetting(name, value) }
 }
 
-void settingRemove(name) {
+void settingRemove(String name){
 	//LogTrace("settingRemove($name)...")
-	if(name) { app?.clearSetting(name.toString()) }
+	if(name){ app?.clearSetting(name.toString()) }
 }
 
-def stateRemove(key) {
-	//if(state?.containsKey(key)) { state.remove(key?.toString()) }
+def stateRemove(key){
+	//if(state.containsKey(key)){ state.remove(key?.toString()) }
 	state.remove(key?.toString())
 	return true
 }
 
-def setAutomationStatus(upd=false) {
-	Boolean myDis = (settings?.autoDisabledreq == true)
+def setAutomationStatus(Boolean upd=false){
+	Boolean myDis = (settings.autoDisabledreq == true)
 	Boolean settingsReset = false // (parent.getSettingVal("disableAllAutomations") == true)
-	Boolean storAutoType = getAutoType() == "storage" ? true : false
-	if(settingsReset && !storAutoType) {
-		if(!myDis && settingsReset) { LogAction("setAutomationStatus: Nest Integrations forcing disable", "info", true) }
+	Boolean storAutoType = getAutoType() == "storage"
+	if(settingsReset && !storAutoType){
+		if(!myDis && settingsReset){ LogAction("setAutomationStatus: Nest Integrations forcing disable", "info", true) }
 		myDis = true
-	} else if(storAutoType) {
+	} else if(storAutoType){
 		myDis = false
 	}
-	if(!getIsAutomationDisabled() && myDis) {
+	if(!getIsAutomationDisabled() && myDis){
 		LogAction("Automation Disabled at (${getDtNow()})", "info", true)
-		state?.autoDisabledDt = getDtNow()
-	} else if(getIsAutomationDisabled() && !myDis) {
+		state.autoDisabledDt = getDtNow()
+	} else if(getIsAutomationDisabled() && !myDis){
 		LogAction("Automation Enabled at (${getDtNow()})", "info", true)
-		state?.autoDisabledDt = null
+		state.autoDisabledDt = null
 	}
-	state?.autoDisabled = myDis
-	if(upd) { app.update() }
+	state.autoDisabled = myDis
+	if(upd){ app.update() }
 }
 
-boolean getIsAutomationDisabled() {
-	def dis = state?.autoDisabled
+Boolean getIsAutomationDisabled(){
+	def dis = state.autoDisabled
 	return (dis != null && dis == true) ? true : false
 }
 
 // getStartTime("dewTbl", "dewTblYest"))
-def getStartTime(tbl1, tbl2=null) {
-	def startTime = 24
-	if (state?."${tbl1}"?.size()) {
+def getStartTime(tbl1, tbl2=null){
+	Integer startTime = 24
+	if (state."${tbl1}"?.size()){
 		startTime = state."${tbl1}".min{it[0].toInteger()}[0].toInteger()
 	}
-	if (state?."${tbl2}"?.size()) {
+	if (state."${tbl2}"?.size()){
 		startTime = Math.min(startTime, state."${tbl2}".min{it[0].toInteger()}[0].toInteger())
 	}
 	return startTime
 }
 
 // getMinTemp("tempTblYest", "tempTbl", "dewTbl", "dewTblYest"))
-def getMinTemp(tbl1, tbl2=null, tbl3=null, tbl4=null) {
-	def list = []
-	if (state?."${tbl1}"?.size() > 0) { list.add(state?."${tbl1}"?.min { it[1] }[1]) }
-	if (state?."${tbl2}"?.size() > 0) { list.add(state?."${tbl2}".min { it[1] }[1]) }
-	if (state?."${tbl3}"?.size() > 0) { list.add(state?."${tbl3}".min { it[1] }[1]) }
-	if (state?."${tbl4}"?.size() > 0) { list.add(state?."${tbl4}".min { it[1] }[1]) }
+def getMinTemp(tbl1, tbl2=null, tbl3=null, tbl4=null){
+	List list = []
+	if (state."${tbl1}"?.size() > 0){ list.add(state."${tbl1}"?.min { it[1] }[1]) }
+	if (state."${tbl2}"?.size() > 0){ list.add(state."${tbl2}".min { it[1] }[1]) }
+	if (state."${tbl3}"?.size() > 0){ list.add(state."${tbl3}".min { it[1] }[1]) }
+	if (state."${tbl4}"?.size() > 0){ list.add(state."${tbl4}".min { it[1] }[1]) }
 	//LogAction("getMinTemp: ${list.min()} result: ${list}", "trace")
 	return list?.min()
 }
 
 // getMaxTemp("tempTblYest", "tempTbl", "dewTbl", "dewTblYest"))
-def getMaxTemp(tbl1, tbl2=null, tbl3=null, tbl4=null) {
+def getMaxTemp(tbl1, tbl2=null, tbl3=null, tbl4=null){
 	def list = []
-	if (state?."${tbl1}"?.size() > 0) { list.add(state?."${tbl1}".max { it[1] }[1]) }
-	if (state?."${tbl2}"?.size() > 0) { list.add(state?."${tbl2}".max { it[1] }[1]) }
-	if (state?."${tbl3}"?.size() > 0) { list.add(state?."${tbl3}".max { it[1] }[1]) }
-	if (state?."${tbl4}"?.size() > 0) { list.add(state?."${tbl4}".max { it[1] }[1]) }
+	if (state."${tbl1}"?.size() > 0){ list.add(state."${tbl1}".max { it[1] }[1]) }
+	if (state."${tbl2}"?.size() > 0){ list.add(state."${tbl2}".max { it[1] }[1]) }
+	if (state."${tbl3}"?.size() > 0){ list.add(state."${tbl3}".max { it[1] }[1]) }
+	if (state."${tbl4}"?.size() > 0){ list.add(state."${tbl4}".max { it[1] }[1]) }
 	//LogAnction("getMaxTemp: ${list.max()} result: ${list}", "trace")
 	return list?.max()
 }
 
 
-String getEDeviceTile(devNum="", dev) {
+String getEDeviceTile(Integer devNum=null, dev){
 	//def obs = getApiXUData(dev)
 //	try {
-		if (state?."TtempTbl${dev.id}"?.size() <= 0 ||
-			state."TEnergyTbl${dev.id}"?.size() <= 0) {
+		if (state."TtempTbl${dev.id}"?.size() <= 0 ||
+			state."TEnergyTbl${dev.id}"?.size() <= 0){
 			return hideChartHtml() // hideWeatherHtml()
 		}
 //Logger("W1")
 		String updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
-		String clientBl = state?.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
+		String clientBl = state.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
 
 		def temperature
 		def level
 		def LastReadTime
 		def capacity
 
-		def devs = state.devices
+		List devs = state.devices
 		devs.each { mydev ->
-			def deviceid = mydev
-			def dni = getDeviceDNI(deviceid)
+			String deviceid = mydev
+			String dni = getDeviceDNI(deviceid)
 			def deviceData
 			def devData
-			if(dev?.deviceNetworkId == dni) {
+			if(dev?.deviceNetworkId == dni){
 				deviceData = state.deviceData
 				devData = deviceData[deviceid]
 //				def d1 = getChildDevice(dni)
@@ -1150,15 +1155,15 @@ String getEDeviceTile(devNum="", dev) {
 
 		def regex1 = /Z/
 		def tt0 = lastReadTime.replaceAll(regex1,"-0000")
-		def curConn = tt0 ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", tt0) : "Not Available"
+		Date curConn = tt0 ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", tt0) : "Not Available"
 
-		def formatVal = "MMM d, yyyy h:mm a"
+		String formatVal = "MMM d, yyyy h:mm a"
 		def tf = new SimpleDateFormat(formatVal)
-		if(getTimeZone()) { tf.setTimeZone(getTimeZone()) }
+		if(getTimeZone()){ tf.setTimeZone(getTimeZone()) }
 		def curConnFmt = tf.format(curConn)
 
 		def gal = (capacity * level/100).toFloat().round(2)
-		def t0 = state?."TEnergyTbl${dev.id}"
+		def t0 = state."TEnergyTbl${dev.id}"
 		//def t1 = t0?.size() > 1 ? t0[-2] : null
 		def t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
 //Logger("t1: $t1    t0: ${t0}    2nd ${(t0[-2])[1]}    last  ${(t0[-1])[1]}   3rd  ${t0[-3]}")
@@ -1172,12 +1177,12 @@ String getEDeviceTile(devNum="", dev) {
 //Logger("used: $used  gal: $gal  ygal: $ygal  ylevel: $ylevel  t1: $t1")
 		def num = 1
 		t0 = capacity*0.8
-		if(gal >= (t0*0.25)) { num = 2 }
-		if(gal >= (t0*0.45)) { num = 3 }
-		if(gal >= (t0*0.65)) { num = 4 }
-		if(gal >= (t0*0.9)) { num = 5 }
+		if(gal >= (t0*0.25)){ num = 2 }
+		if(gal >= (t0*0.45)){ num = 3 }
+		if(gal >= (t0*0.65)){ num = 4 }
+		if(gal >= (t0*0.9)){ num = 5 }
 		//def url = "https://app.tankutility.com/images/tank-${num}.png"
-		def url = "https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/tank-${num}.png"
+		String url = "https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/tank-${num}.png".toString()
 
 		def mainHtml = """
 			<div class="device">
@@ -1208,7 +1213,7 @@ String getEDeviceTile(devNum="", dev) {
 //	      render contentType: "text/html", data: mainHtml, status: 200
 /*
 	}
-	catch (ex) {
+	catch (ex){
 		log.error "getDeviceTile Exception:", ex
 		//exceptionDataHandler(ex?.message, "getDeviceTile")
 	}
@@ -1222,24 +1227,24 @@ String getEDeviceTile(devNum="", dev) {
 
 
 /*
-	if (state?."TtempTbl${dev.id}" == null) {
+	if (state."TtempTbl${dev.id}" == null){
 		state."TtempTbl${dev.id}" = []
 		state."TEnergyTbl${dev.id}" = []
 	}
 */
 
-String getDataString(Integer seriesIndex, dev) {
+String getDataString(Integer seriesIndex, dev){
 	String dataString = ""
 	def dataTable = []
-	switch (seriesIndex) {
+	switch (seriesIndex){
 		case 1:
-			dataTable = state?."TtempTbl${dev.id}"
+			dataTable = state."TtempTbl${dev.id}"
 			break
 		case 2:
-			dataTable = state?."TEnergyTbl${dev.id}"
+			dataTable = state."TEnergyTbl${dev.id}"
 			break
 	}
-	dataTable.each() {
+	dataTable.each(){
 		def dataArray = [it[0],null,null]
 		dataArray[seriesIndex] = it[1]
 		dataString += dataArray?.toString() + ","
@@ -1247,11 +1252,11 @@ String getDataString(Integer seriesIndex, dev) {
 	return dataString
 }
 
-String historyGraphHtml(devNum="", dev) {
+String historyGraphHtml(Integer devNum=null, dev){
 //Logger("HistoryG 1")
 	String html = ""
-	if(true) {
-		if (state?."TtempTbl${dev.id}"?.size() > 0 && state?."TEnergyTbl${dev.id}"?.size() > 0) {
+	if(true){
+		if (state."TtempTbl${dev.id}"?.size() > 0 && state."TEnergyTbl${dev.id}"?.size() > 0){
 			String tempStr = getTempUnitStr()
 			def minval = getMinTemp("TtempTbl${dev.id}")
 			String minstr = "minValue: ${minval},"
@@ -1271,7 +1276,7 @@ String historyGraphHtml(devNum="", dev) {
 			  <script type="text/javascript">
 				google.charts.load('current', {packages: ['corechart']});
 				google.charts.setOnLoadCallback(drawWeatherGraph);
-				function drawWeatherGraph() {
+				function drawWeatherGraph(){
 					var data = new google.visualization.DataTable();
 					data.addColumn('number', 'day');
 					data.addColumn('number', 'Temp (T)');
@@ -1337,7 +1342,7 @@ String historyGraphHtml(devNum="", dev) {
 			<h4 style="font-size: 22px; font-weight: bold; text-align: center; background: #00a1db; color: #f5f5f5;">History</h4>
 			<div id="chart_div${devNum}" style="width: 100%; height: 225px;"></div>
 			"""
-		} else {
+		}else{
 			html = """
 				<h4 style="font-size: 22px; font-weight: bold; text-align: center; background: #00a1db; color: #f5f5f5;">Event History</h4>
 				<br></br>
@@ -1351,7 +1356,7 @@ String historyGraphHtml(devNum="", dev) {
 }
 
 /*
-def hideWeatherHtml() {
+def hideWeatherHtml(){
 	def data = """
 		<br></br><br></br>
 		<h3 style="font-size: 22px; font-weight: bold; text-align: center; background: #00a1db; color: #f5f5f5;">The Required Weather data is not available yet...</h3>
@@ -1362,11 +1367,11 @@ def hideWeatherHtml() {
 */
 
 
-boolean wantMetric() { return (getTemperatureScale() == "C") }
+Boolean wantMetric(){ return (getTemperatureScale() == "C") }
 
-String getTempUnitStr() {
+String getTempUnitStr(){
 	String tempStr = "\u00b0F"
-	if ( wantMetric() ) {
+	if(wantMetric()){
 		tempStr = "\u00b0C"
 	}
 	return tempStr
@@ -1374,39 +1379,40 @@ String getTempUnitStr() {
 
 
 
-def getTimeZone() {
+def getTimeZone(){
 	def tz = null
-	if(location?.timeZone) { tz = location?.timeZone }
-	if(!tz) { LogAction("getTimeZone: Hub or Nest TimeZone not found", "warn", true) }
+	if(location?.timeZone){ tz = location?.timeZone }
+	if(!tz){ LogAction("getTimeZone: Hub or Nest TimeZone not found", "warn", true) }
 	return tz
 }
 
-String getDtNow() {
-	def now = new Date()
+String getDtNow(){
+	Date now = new Date()
 	return formatDt(now)
 }
 
-String formatDt(dt) {
+String formatDt(dt){
 	def tf = new SimpleDateFormat("E MMM dd HH:mm:ss z yyyy")
-	if(getTimeZone()) { tf.setTimeZone(getTimeZone()) }
+	if(getTimeZone()){ tf.setTimeZone(getTimeZone()) }
 	else {
 		LogAction("HE TimeZone is not set; Please open your location and Press Save", "warn", true)
+		return ""
 	}
 	return tf.format(dt)
 }
 
-def GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=null) {
+Long GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=null){
 	//LogTrace("[GetTimeDiffSeconds] StartDate: $strtDate | StopDate: ${stpDate ?: "Not Sent"} | MethodName: ${methName ?: "Not Sent"})")
-	if((strtDate && !stpDate) || (strtDate && stpDate)) {
-		//if(strtDate?.contains("dtNow")) { return 10000 }
-		def now = new Date()
+	if((strtDate && !stpDate) || (strtDate && stpDate)){
+		//if(strtDate?.contains("dtNow")){ return 10000 }
+		Date now = new Date()
 		String stopVal = stpDate ? stpDate.toString() : formatDt(now)
-		long start = Date.parse("E MMM dd HH:mm:ss z yyyy", strtDate).getTime()
-		long stop = Date.parse("E MMM dd HH:mm:ss z yyyy", stopVal).getTime()
-		int diff = (int) (long) (stop - start) / 1000
+		Long start = Date.parse("E MMM dd HH:mm:ss z yyyy", strtDate).getTime()
+		Long stop = Date.parse("E MMM dd HH:mm:ss z yyyy", stopVal).getTime()
+		Long diff = (stop - start) / 1000L
 		LogTrace("[GetTimeDiffSeconds] Results for '$methName': ($diff seconds)")
 		return diff
-	} else { return null }
+	}else{ return null }
 }
 
 
@@ -1414,53 +1420,52 @@ def GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=nul
 |									LOGGING AND Diagnostic									|
 *************************************************************************************************/
 
-void LogTrace(String msg, String logSrc=null) {
-	boolean trOn = (showDebug && advAppDebug) ? true : false
-	if(trOn) {
+void LogTrace(String msg, String logSrc=null){
+	Boolean trOn = (showDebug && advAppDebug) ? true : false
+	if(trOn){
 		Logger(msg, "trace", logSrc)
 	}
 }
 
-void LogAction(String msg, String type=null, boolean showAlways=false, String logSrc=null) {
+void LogAction(String msg, String type=null, Boolean showAlways=false, String logSrc=null){
 	String myType = type ?: "debug"
-	boolean isDbg = showDebug ? true : false
-	if(showAlways || isDbg) { Logger(msg, myType, logSrc) }
+	Boolean isDbg = showDebug ? true : false
+	if(showAlways || isDbg){ Logger(msg, myType, logSrc) }
 }
 
-void Logger(String msg, String type=null, String logSrc=null, boolean noLog=false) {
+void Logger(String msg, String type=null, String logSrc=null, Boolean noLog=false){
 	String myType = type ?: "debug"
-	if(!noLog) {
-		if(msg && myType) {
+	if(!noLog){
+		if(msg && myType){
 			String labelstr = ""
-			if(state?.dbgAppndName == null) {
-				def tval = settings?.dbgAppndName
-				state?.dbgAppndName = (tval || tval == null) ? true : false
+			if(state.dbgAppndName == null){
+				def tval = settings.dbgAppndName
+				state.dbgAppndName = (tval || tval == null) ? true : false
 			}
 			String t0 = app.label
-			if(state?.dbgAppndName) { labelstr = "${app.label} | " }
-			String themsg = "${labelstr}${msg}"
+			if(state.dbgAppndName){ labelstr = "${app.label} | " }
+			String themsg = labelstr+msg
 			//log.debug "Logger remDiagTest: $msg | $type | $logSrc"
-			switch(myType) {
+			switch(myType){
 				case "debug":
-					log.debug "${themsg}"
+					log.debug themsg
 					break
 				case "info":
-					log.info "|| ${themsg}"
+					log.info '|| '+themsg
 					break
 				case "trace":
-					log.trace "| ${themsg}"
+					log.trace '| '+themsg
 					break
 				case "error":
-					log.error "| ${themsg}"
+					log.error '| '+themsg
 					break
 				case "warn":
-					log.warn "| ${themsg}"
+					log.warn '| '+themsg
 					break
 				default:
-					log.debug "${themsg}"
+					log.debug themsg
 					break
 			}
-		}
-		else { log.error "${labelstr}Logger Error - type: ${type} | msg: ${msg} | logSrc: ${logSrc}" }
+		} else { log.error "${labelstr}Logger Error - type: ${type} | msg: ${msg} | logSrc: ${logSrc}" }
 	}
 }
