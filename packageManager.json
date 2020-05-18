@@ -1,0 +1,28 @@
+{
+  "packageName": "tankUtility",
+  "author": "nh.schottfam",
+  "minimumHEVersion": "2.1.9",
+  "dateReleased": "2020-05-17",
+  "apps": [
+    {
+      "id": "1fd7d1c5-9a20-4ee2-8734-e8b8c98d4328",
+      "name": "Tank Utility (Connect)",
+      "namespace": "imnotbob",
+      "location": "https://raw.githubusercontent.com/imnotbob/tankUtility/master/app/tankconnect.groovy",
+      "required": true,
+      "oauth": false
+    }
+  ],
+  "drivers": [
+    {
+      "id": "f92741da-34e9-48d2-95d8-9cde66288cca",
+      "name": "Tank Utility",
+      "namespace": "imnotbob",
+      "location": "https://raw.githubusercontent.com/imnotbob/tankUtility/master/device/tankutility.groovy",
+      "required": true
+    }
+  ],
+  "version": "1.0.0",
+  "releaseNotes": "Latest release",
+  "communityLink": "https://community.hubitat.com/t/tankutility-monitoring-app-and-device/8891"
+}
