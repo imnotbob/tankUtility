@@ -10,7 +10,7 @@
       "namespace": "imnotbob",
       "location": "https://raw.githubusercontent.com/imnotbob/tankUtility/master/app/tankconnect.groovy",
       "required": true,
-      "oauth": false
+      "oauth": true
     }
   ],
   "drivers": [

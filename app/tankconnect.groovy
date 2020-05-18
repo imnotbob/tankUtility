@@ -12,7 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	April 24, 2020
+ *	May 18, 2020
  */
 
 import groovy.json.*
@@ -29,7 +29,8 @@ definition(
 	iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
 	iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
 	iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-	singleInstance: true
+	singleInstance: true,
+	oauth:true
 )
 
 static String appVersion() { "0.0.3" }
@@ -516,7 +517,7 @@ static Integer defaultAutomationTime(){
 	return 5
 }
 
-def scheduleAutomationEval(Integer schedtime = defaultAutomationTime()){
+void scheduleAutomationEval(Integer schedtime = defaultAutomationTime()){
 	Integer theTime = schedtime
 	if(theTime < defaultAutomationTime()){ theTime = defaultAutomationTime() }
 	String autoType = getAutoType()
@@ -640,7 +641,7 @@ void runAutomationEval(){
 }
 
 
-def getSomeData(dev, temperature, level){
+void getSomeData(dev, temperature, level){
 	LogAction("getSomeData: ${temperature} ${level}", "info", false)
 	if (state."TtempTbl${dev.id}" == null){
 		state."TtempTbl${dev.id}" = []
@@ -1130,7 +1131,7 @@ String getEDeviceTile(Integer devNum=null, dev){
 
 		def temperature
 		def level
-		def LastReadTime
+		String lastReadTime
 		def capacity
 
 		List devs = state.devices
@@ -1154,13 +1155,13 @@ String getEDeviceTile(Integer devNum=null, dev){
 //Logger("W2")
 
 		def regex1 = /Z/
-		def tt0 = lastReadTime.replaceAll(regex1,"-0000")
-		Date curConn = tt0 ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", tt0) : "Not Available"
+		String tt0 = lastReadTime.replaceAll(regex1,"-0000")
+		Date curConn = tt0 ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", tt0) : null //"Not Available"
 
 		String formatVal = "MMM d, yyyy h:mm a"
 		def tf = new SimpleDateFormat(formatVal)
 		if(getTimeZone()){ tf.setTimeZone(getTimeZone()) }
-		def curConnFmt = tf.format(curConn)
+		String curConnFmt = curConn!=null ? tf.format(curConn) : "Not Available"
 
 		def gal = (capacity * level/100).toFloat().round(2)
 		def t0 = state."TEnergyTbl${dev.id}"
