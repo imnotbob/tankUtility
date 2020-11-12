@@ -12,7 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	May 18, 2020
+ *	November 6, 2020
  */
 
 import groovy.json.*
@@ -227,6 +227,7 @@ List getDevices(){
 		query: [
 			token: state.APIToken
 		],
+		timeout: 20
 	]
 	
 	try {
@@ -274,6 +275,7 @@ private Map RefreshDeviceStatus(){
 			query: [
 				token: state.APIToken
 			],
+			timeout: 20
 		]
 		try {
 			httpGet(Params){ resp ->
@@ -335,7 +337,8 @@ private Boolean getAPIToken(){
 	def Params = [
 		uri: TankUtilAPIEndPoint(),
 		path: "/api/getToken",
-		headers: ['Authorization': "Basic ${getBase64AuthString()}"]
+		headers: ['Authorization': "Basic ${getBase64AuthString()}"],
+		timeout: 20
 	]
 
 	try {
