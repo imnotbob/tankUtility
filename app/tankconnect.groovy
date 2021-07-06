@@ -319,7 +319,7 @@ void ahandler(resp, Map edata) {
 	if (responseCode == 200 && resp.data) {
 		String dev = edata.a
 		//log.error "resp.data: ${resp.data}"
-		List<Map> rData = (List<Map>) new JsonSlurper().parseText((String) resp.data)
+		Map rData = (Map) new JsonSlurper().parseText((String) resp.data)
 		deviceData[dev] = (Map)rData.device
 		LogTrace("RefreshDeviceStatus: received device data for ${dev} = ${deviceData[dev]}")
 		state.deviceData = deviceData
