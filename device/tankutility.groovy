@@ -73,8 +73,7 @@ void poll() {
 }
 
 def generateEvent(Map results) {
-	results.each { name, value ->
+	results.each { String name, value ->
 		sendEvent(name: name, value: value)
 	}
-	return
 }

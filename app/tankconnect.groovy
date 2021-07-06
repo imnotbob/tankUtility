@@ -12,7 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	November 6, 2020
+ *	July 6, 2021
  */
 
 import groovy.json.*
@@ -33,7 +33,8 @@ definition(
 	oauth:true
 )
 
-static String appVersion() { "0.0.3" }
+@SuppressWarnings('unused')
+static String appVersion() { "0.0.4" }
 
 preferences {
 	page(name: "settings", title: "Settings", content: "settingsPage", install:true)
@@ -48,16 +49,19 @@ private static String TankUtilAPIEndPoint(){ return "https://data.tankutility.co
 private static String TankUtilityDataEndPoint(){ return TankUtilAPIEndPoint() }
 private static getChildName(){ return "Tank Utility" }
 
+@SuppressWarnings('unused')
 void installed(){
 	log.info "Installed with settings: ${settings}"
 	initialize()
 }
 
+@SuppressWarnings('unused')
 void updated(){
 	log.info "Updated with settings: ${settings}"
 	initialize()
 }
 
+@SuppressWarnings('unused')
 void uninstalled(){
 	def todelete = getAllChildDevices()
 	todelete.each { deleteChildDevice(it.deviceNetworkId) }
@@ -73,6 +77,7 @@ void initialize(){
 	}
 	settingUpdate("advAppDebug", "true", "bool")
 
+	state.deviceData = [:]
 	if(!state.autoTyp){ state.autoTyp = "chart" }
 	unsubscribe()
 	unschedule()
@@ -82,8 +87,8 @@ void initialize(){
 
 	setAutomationStatus()
 
-	List devs = getDevices()
-	Map devicestatus = RefreshDeviceStatus()
+	List<String> devs = getDevices()
+	Map<String,Map> devicestatus = RefreshDeviceStatus()
 	Boolean quickOut = false
 	devs.each { String dev ->
 		String ChildName = getChildName()
@@ -97,7 +102,6 @@ void initialize(){
 			runIn(5, "updated", [overwrite: true])
 			quickOut = true
 			return
-		}else{
 		}
 		if(d){
 			LogAction("device for ${d.displayName} with dni ${dni} found", "info", true)
@@ -122,6 +126,7 @@ void initialize(){
 	pollChildren(false)
 }
 
+@SuppressWarnings('unused')
 private settingsPage(){
 	if(!state.access_token){ getAccessToken() }
 	if(!state.access_token){ enableOauth(); getAccessToken() }
@@ -145,7 +150,7 @@ private settingsPage(){
 					devs = getDevices()
 					Map devicestatus = RefreshDeviceStatus()
 				}
-				String t1 = ""
+				String t1
 				t1 = devs?.size() ? "Status\n • Tanks (${devs.size()})" : ""
 				if(devs?.size() > 1){
 					String myUrl = getAppEndpointUrl("deviceTiles")
@@ -213,9 +218,9 @@ private settingsPage(){
 	}
 }
 
-List getDevices(){
+List<String> getDevices(){
 	LogTrace("getDevices")
-	List devices = []
+	List<String> devices = []
 
 	if(!getToken()){
 		LogAction("getDevice: no token available", "info", true)
@@ -253,22 +258,24 @@ List getDevices(){
 	return devices
 }
 
-private Map RefreshDeviceStatus(){
+private Map<String,Map> RefreshDeviceStatus(Boolean sync=true){
 	LogTrace("RefreshDeviceStatus()")
-	Map deviceData = [:]
+	Map<String,Map> deviceData = state.deviceData ?: (Map)[:]
 
 	if(!getToken()){
 		LogAction("RefreshDeviceStatus: no token available", "info", true)
-		return deviceData
+		state.deviceData = [:]
+		return [:]
 	}
-	List devices = state.devices
+	List<String> devices = state.devices
 	if(!devices){
 		LogAction("RefreshDeviceState: no devices avaiable", "warn", true)
-		return deviceData
+		state.deviceData = [:]
+		return [:]
 	}
 
 	devices.each {String dev ->
-		String dni = getDeviceDNI(dev)
+		//String dni = getDeviceDNI(dev)
 		def Params = [
 			uri: TankUtilityDataEndPoint(),
 			path: "/api/devices/${dev}",
@@ -277,26 +284,52 @@ private Map RefreshDeviceStatus(){
 			],
 			timeout: 20
 		]
-		try {
-			httpGet(Params){ resp ->
-				if(resp.status == 200){	
-					deviceData[dev] = resp.data.device
-					LogTrace("RefreshDeviceStatus: received device data for ${dev} = ${deviceData[dev]}")
-				}else{
-					LogAction("RefreshDeviceStatus: Error while receiving events ${resp.status}", "error", true)
-					state.APIToken = null
-					state.APITokenExpirationTime = 0L
+		if(sync){
+			try {
+				httpGet(Params){ resp ->
+					if(resp.status == 200){
+						deviceData[dev] = (Map)resp.data.device
+						LogTrace("RefreshDeviceStatus: received device data for ${dev} = ${deviceData[dev]}")
+					}else{
+						LogAction("RefreshDeviceStatus: Error while receiving events ${resp.status}", "error", true)
+						state.APIToken = null
+						state.APITokenExpirationTime = 0L
+					}
 				}
+
+			} catch (e){
+				log.error "Error while processing events for RefreshDeviceStatus ${e}"
+				state.APIToken = null
+				state.APITokenExpirationTime = 0L
 			}
-	
-		} catch (e){
-			log.error "Error while processing events for RefreshDeviceStatus ${e}"
-			state.APIToken = null
-			state.APITokenExpirationTime = 0L
+		} else {
+			asynchttpGet('ahandler', Params, [a:dev])
+            return [:]
 		}
 	}
 	state.deviceData = deviceData
 	return deviceData
+}
+
+@SuppressWarnings('unused')
+void ahandler(resp, Map edata) {
+	LogTrace("ahandler()")
+	Map<String,Map> deviceData = state.deviceData ?: (Map)[:]
+	Integer responseCode = resp.status
+	if (responseCode == 200 && resp.data) {
+		String dev = edata.a
+		//log.error "resp.data: ${resp.data}"
+		List<Map> rData = (List<Map>) new JsonSlurper().parseText((String) resp.data)
+		deviceData[dev] = (Map)rData.device
+		LogTrace("RefreshDeviceStatus: received device data for ${dev} = ${deviceData[dev]}")
+		state.deviceData = deviceData
+		runIn(8, "pollChildrenF")
+	}else{
+		String dev = edata.a
+		LogAction("RefreshDeviceStatus: Error while receiving events ${resp.status} for ${dev}", "error", true)
+		state.APIToken = null
+		state.APITokenExpirationTime = 0L
+	}
 }
 
 private Boolean getToken(){
@@ -322,7 +355,7 @@ Boolean isTokenExpired(){
 		return true
 	}else{
 		Long ExpirationDate = state.APITokenExpirationTime
-		if (currentDate >= ExpirationDate){return true}else{return false}
+		return currentDate >= ExpirationDate
 	}
 }
 
@@ -367,9 +400,14 @@ private Boolean getAPIToken(){
 	return true
 }
 
+@SuppressWarnings('unused')
+void pollChildrenF(){
+   pollChildren(false)
+}
+
 void pollChildren(Boolean updateData=true){
 	Long execTime = now()
-	LogTrace("pollChildren")
+	LogTrace("pollChildren $updateData")
 	if(!getToken()){
 		LogAction("pollChilcren: Was not able to refresh API token expired at ${state.APITokenExpirationTime}.", "warn", true)
 		return
@@ -381,7 +419,8 @@ void pollChildren(Boolean updateData=true){
 	}
 	Map deviceData
 	if(updateData){
-		deviceData = RefreshDeviceStatus()
+		deviceData = RefreshDeviceStatus(false)
+		return
 	}else{
 		deviceData = state.deviceData
 	}
@@ -428,20 +467,20 @@ String getDeviceDNI(String DeviceID){
 }
 
 static String strCapitalize(str){
-	return str ? str?.toString().capitalize() : null
+	return str ? str?.toString()?.capitalize() : (String)null
 }
 
+@SuppressWarnings('unused')
 void automationGenericEvt(evt){
 	Long startTime = now()
 	Long eventDelay = startTime - evt.date.getTime()
-	LogAction("${evt?.name.toUpperCase()} Event | Device: ${evt?.displayName} | Value: (${strCapitalize(evt?.value)}) with a delay of ${eventDelay}ms", "info", false)
+	LogAction("${evt.name.toUpperCase()} Event | Device: ${evt?.displayName} | Value: (${strCapitalize(evt?.value)}) with a delay of ${eventDelay}ms", "info", false)
 
 	doTheEvent(evt)
 }
 
 void doTheEvent(evt){
-	if(getIsAutomationDisabled()){ return }
-	else {
+	if(!getIsAutomationDisabled()){
 		scheduleAutomationEval()
 		storeLastEventData(evt)
 	}
@@ -500,7 +539,7 @@ void storeExecutionHistory(val, String method = null){
 */
 }
 
-List addToList(val, list, Integer listSize){
+static List addToList(val, list, Integer listSize){
 	if(list?.size() < listSize){
 		list.push(val)
 	} else if(list?.size() > listSize){
@@ -567,10 +606,11 @@ void scheduleAutomationEval(Integer schedtime = defaultAutomationTime()){
 }
 
 
-Integer getAutoRunSec(){ return !state.autoRunDt ? 100000 : GetTimeDiffSeconds(state.autoRunDt, null, "getAutoRunSec").toInteger() }
+Integer getAutoRunSec(){ return !state.autoRunDt ? 100000 : GetTimeDiffSeconds((String)state.autoRunDt, null, "getAutoRunSec").toInteger() }
 
-Integer getAutoRunInSec(){ return !state.autoRunInSchedDt ? 100000 : GetTimeDiffSeconds(state.autoRunInSchedDt, null, "getAutoRunInSec").toInteger() }
+Integer getAutoRunInSec(){ return !state.autoRunInSchedDt ? 100000 : GetTimeDiffSeconds((String)state.autoRunInSchedDt, null, "getAutoRunInSec").toInteger() }
 
+@SuppressWarnings('unused')
 void runAutomationEval(){
 	LogTrace("runAutomationEval")
 	Long execTime = now()
@@ -665,8 +705,8 @@ void getSomeData(dev, temperature, level){
 	state."TEnergyTbl${dev.id}" =	addValue(energyTbl, dayNum, level)
 }
 
-List addValue(List table, Integer dayNum, val){
-	List newTable = table
+static List addValue(List<List> table, Integer dayNum, val){
+	List<List> newTable = table
 	if(table?.size()){
 		Integer lastDay = table.last()[0]
 /*
@@ -686,9 +726,10 @@ List addValue(List table, Integer dayNum, val){
 }
 
 
+@SuppressWarnings('unused')
 def getTile(){
 	LogTrace ("getTile()")
-	String responseMsg = ""
+	String responseMsg
 
 	String dni = "${params?.dni}"
 	if (dni){
@@ -723,8 +764,8 @@ def renderDeviceTiles(type=null, theDev=null){
 		def devices = allDevices
 		Integer devNum = 1
 		String myType = type ?: "All Devices"
-		devices?.sort {it?.getLabel()}.each { dev ->
-			def navMap = [:]
+		devices?.sort {it?.getLabel()}?.each { dev ->
+			Map navMap
 			Boolean hasHtml = true // (dev?.hasHtml() == true)
 //Logger("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeName}")
 			if((dev?.typeName in ["Tank Utility"]) &&
@@ -841,7 +882,7 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 //	} catch (ex){ log.error "renderDeviceData Exception:", ex }
 }
 
-Map navHtmlBuilder(navMap, Integer idNum){
+static Map navHtmlBuilder(Map navMap, Integer idNum){
 	Map res = [:]
 	String htmlStr = ""
 	String jsStr = ""
@@ -855,8 +896,8 @@ Map navHtmlBuilder(navMap, Integer idNum){
 	if(navMap?.items){
 		def nItems = navMap?.items
 		nItems?.each {
-			htmlStr += """\n<li class="nav-subkey-item"><a id="nav-subitem${idNum}-${it?.toString().toLowerCase()}">${it}<span class="icon"></span></a></li>"""
-			jsStr += navJsBuilder("nav-subitem${idNum}-${it?.toString().toLowerCase()}", "item${idNum}-${it?.toString().toLowerCase()}")
+			htmlStr += """\n<li class="nav-subkey-item"><a id="nav-subitem${idNum}-${it?.toString()?.toLowerCase()}">${it}<span class="icon"></span></a></li>"""
+			jsStr += navJsBuilder("nav-subitem${idNum}-${it?.toString()?.toLowerCase()}", "item${idNum}-${it?.toString()?.toLowerCase()}")
 		}
 	}
 	htmlStr += """\n		</div>
@@ -866,7 +907,7 @@ Map navHtmlBuilder(navMap, Integer idNum){
 	return res
 }
 
-String navJsBuilder(String btnId, String divId){
+static String navJsBuilder(String btnId, String divId){
 	String res = """
 			\$("#${btnId}").click(function(){
 				\$("html, body").animate({scrollTop: \$("#${divId}").offset().top - hdrHeight - 20},500);
@@ -917,7 +958,7 @@ String getWebHeaderHtml(String title, Boolean clipboard=true, Boolean vex=false,
 	return html
 }
 
-String hideChartHtml(){
+static String hideChartHtml(){
 	String data = """
 		<div class="swiper-slide">
 			<section class="sectionBg" style="min-height: 250px;">
@@ -937,6 +978,7 @@ String getAutoType(){
 	return state.autoTyp ?: (String)null
 }
 
+@SuppressWarnings('unused')
 String getAutomationType(){
 	return state.autoTyp ?: (String)null
 }
@@ -986,7 +1028,7 @@ void resetAppAccessToken(Boolean reset){
 
 static String sectionTitleStr(String title)	{ return '<h3>'+title+'</h3>' }
 static String inputTitleStr(String title)	{ return '<u>'+title+'</u>' }
-static String pageTitleStr(String title)		{ return '<h1>'+title+'</h1>' }
+//static String pageTitleStr(String title)		{ return '<h1>'+title+'</h1>' }
 static String paraTitleStr(String title)		{ return '<b>'+title+'</b>' }
 
 static String imgTitle(String imgSrc, String titleStr, String color=null, Integer imgWidth=30, Integer imgHeight=null){
@@ -1027,10 +1069,12 @@ String getAppImg(String imgName, Boolean on = null){
 	return (!disAppIcons || on) ? icons(imgName) : ""
 }
 
+@SuppressWarnings('unused')
 String getDevImg(String imgName, Boolean on = null){
 	return (!disAppIcons || on) ? icons(imgName, "Devices") : ""
 }
 
+@SuppressWarnings('unused')
 void logsOff(){
 	Logger("debug logging disabled...")
 	settingUpdate("showDebug", "false", "bool")
@@ -1054,6 +1098,7 @@ void settingRemove(String name){
 	if(name){ app?.clearSetting(name.toString()) }
 }
 
+@SuppressWarnings('unused')
 def stateRemove(key){
 	//if(state.containsKey(key)){ state.remove(key?.toString()) }
 	state.remove(key?.toString())
@@ -1083,17 +1128,17 @@ def setAutomationStatus(Boolean upd=false){
 
 Boolean getIsAutomationDisabled(){
 	def dis = state.autoDisabled
-	return (dis != null && dis == true) ? true : false
+	return (dis != null && dis == true)
 }
 
 // getStartTime("dewTbl", "dewTblYest"))
-def getStartTime(tbl1, tbl2=null){
+def getStartTime(String tbl1, String tbl2=(String)null){
 	Integer startTime = 24
-	if (state."${tbl1}"?.size()){
-		startTime = state."${tbl1}".min{it[0].toInteger()}[0].toInteger()
+	if ( ((List)state."${tbl1}")?.size()){
+		startTime = (Integer)(((List<List>)state."${tbl1}").min{it[0].toInteger()}[0].toInteger())
 	}
 	if (state."${tbl2}"?.size()){
-		startTime = Math.min(startTime, state."${tbl2}".min{it[0].toInteger()}[0].toInteger())
+		startTime = Math.min(startTime, (Integer)(((List<List>)state."${tbl2}").min{it[0].toInteger()}[0].toInteger()) )
 	}
 	return startTime
 }
@@ -1101,21 +1146,21 @@ def getStartTime(tbl1, tbl2=null){
 // getMinTemp("tempTblYest", "tempTbl", "dewTbl", "dewTblYest"))
 def getMinTemp(tbl1, tbl2=null, tbl3=null, tbl4=null){
 	List list = []
-	if (state."${tbl1}"?.size() > 0){ list.add(state."${tbl1}"?.min { it[1] }[1]) }
-	if (state."${tbl2}"?.size() > 0){ list.add(state."${tbl2}".min { it[1] }[1]) }
-	if (state."${tbl3}"?.size() > 0){ list.add(state."${tbl3}".min { it[1] }[1]) }
-	if (state."${tbl4}"?.size() > 0){ list.add(state."${tbl4}".min { it[1] }[1]) }
+	if (((List)state."${tbl1}")?.size() > 0){ list.add( ((List<List>)state."${tbl1}")?.min { it[1] }[1]) }
+	if (((List)state."${tbl2}")?.size() > 0){ list.add( ((List<List>)state."${tbl2}").min { it[1] }[1]) }
+	if (((List)state."${tbl3}")?.size() > 0){ list.add( ((List<List>)state."${tbl3}").min { it[1] }[1]) }
+	if (((List)state."${tbl4}")?.size() > 0){ list.add( ((List<List>)state."${tbl4}").min { it[1] }[1]) }
 	//LogAction("getMinTemp: ${list.min()} result: ${list}", "trace")
 	return list?.min()
 }
 
 // getMaxTemp("tempTblYest", "tempTbl", "dewTbl", "dewTblYest"))
 def getMaxTemp(tbl1, tbl2=null, tbl3=null, tbl4=null){
-	def list = []
-	if (state."${tbl1}"?.size() > 0){ list.add(state."${tbl1}".max { it[1] }[1]) }
-	if (state."${tbl2}"?.size() > 0){ list.add(state."${tbl2}".max { it[1] }[1]) }
-	if (state."${tbl3}"?.size() > 0){ list.add(state."${tbl3}".max { it[1] }[1]) }
-	if (state."${tbl4}"?.size() > 0){ list.add(state."${tbl4}".max { it[1] }[1]) }
+	List list = []
+	if (((List)state."${tbl1}")?.size() > 0){ list.add( ((List<List>)state."${tbl1}").max { it[1] }[1]) }
+	if (((List)state."${tbl2}")?.size() > 0){ list.add( ((List<List>)state."${tbl2}").max { it[1] }[1]) }
+	if (((List)state."${tbl3}")?.size() > 0){ list.add( ((List<List>)state."${tbl3}").max { it[1] }[1]) }
+	if (((List)state."${tbl4}")?.size() > 0){ list.add( ((List<List>)state."${tbl4}").max { it[1] }[1]) }
 	//LogAnction("getMaxTemp: ${list.max()} result: ${list}", "trace")
 	return list?.max()
 }
@@ -1124,13 +1169,13 @@ def getMaxTemp(tbl1, tbl2=null, tbl3=null, tbl4=null){
 String getEDeviceTile(Integer devNum=null, dev){
 	//def obs = getApiXUData(dev)
 //	try {
-		if (state."TtempTbl${dev.id}"?.size() <= 0 ||
-			state."TEnergyTbl${dev.id}"?.size() <= 0){
+		if ( ((List)state."TtempTbl${dev.id}")?.size() <= 0 ||
+				((List)state."TEnergyTbl${dev.id}")?.size() <= 0){
 			return hideChartHtml() // hideWeatherHtml()
 		}
 //Logger("W1")
-		String updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
-		String clientBl = state.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
+		//String updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
+		//String clientBl = state.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
 
 		def temperature
 		def level
@@ -1156,9 +1201,9 @@ String getEDeviceTile(Integer devNum=null, dev){
 		}
 
 //Logger("W2")
-
+	if(capacity==null || level==null) {return (String)null}
 		def regex1 = /Z/
-		String tt0 = lastReadTime.replaceAll(regex1,"-0000")
+		String tt0 = lastReadTime?.replaceAll(regex1,"-0000")
 		Date curConn = tt0 ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", tt0) : null //"Not Available"
 
 		String formatVal = "MMM d, yyyy h:mm a"
@@ -1167,9 +1212,9 @@ String getEDeviceTile(Integer devNum=null, dev){
 		String curConnFmt = curConn!=null ? tf.format(curConn) : "Not Available"
 
 		def gal = (capacity * level/100).toFloat().round(2)
-		def t0 = state."TEnergyTbl${dev.id}"
+		List<List> t0 = state."TEnergyTbl${dev.id}"
 		//def t1 = t0?.size() > 1 ? t0[-2] : null
-		def t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
+		List t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
 //Logger("t1: $t1    t0: ${t0}    2nd ${(t0[-2])[1]}    last  ${(t0[-1])[1]}   3rd  ${t0[-3]}")
 		t1 = (!t1 && t0?.size() > 1) ? t0[-2] : t1
 //Logger("again t1: $t1    t0: ${t0}")
@@ -1180,11 +1225,11 @@ String getEDeviceTile(Integer devNum=null, dev){
 		used = (used < -2) ? "${used} (refilled)" : used
 //Logger("used: $used  gal: $gal  ygal: $ygal  ylevel: $ylevel  t1: $t1")
 		def num = 1
-		t0 = capacity*0.8
-		if(gal >= (t0*0.25)){ num = 2 }
-		if(gal >= (t0*0.45)){ num = 3 }
-		if(gal >= (t0*0.65)){ num = 4 }
-		if(gal >= (t0*0.9)){ num = 5 }
+		def te0 = capacity*0.8
+		if(gal >= (te0*0.25)){ num = 2 }
+		if(gal >= (te0*0.45)){ num = 3 }
+		if(gal >= (te0*0.65)){ num = 4 }
+		if(gal >= (te0*0.9)){ num = 5 }
 		//def url = "https://app.tankutility.com/images/tank-${num}.png"
 		String url = "https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/tank-${num}.png".toString()
 
@@ -1239,17 +1284,17 @@ String getEDeviceTile(Integer devNum=null, dev){
 
 String getDataString(Integer seriesIndex, dev){
 	String dataString = ""
-	def dataTable = []
+	List<List> dataTable = []
 	switch (seriesIndex){
 		case 1:
-			dataTable = state."TtempTbl${dev.id}"
+			dataTable = (List<List>)state."TtempTbl${dev.id}"
 			break
 		case 2:
-			dataTable = state."TEnergyTbl${dev.id}"
+			dataTable = (List<List>)state."TEnergyTbl${dev.id}"
 			break
 	}
 	dataTable.each(){
-		def dataArray = [it[0],null,null]
+		List dataArray = [it[0],null,null]
 		dataArray[seriesIndex] = it[1]
 		dataString += dataArray?.toString() + ","
 	}
@@ -1258,105 +1303,104 @@ String getDataString(Integer seriesIndex, dev){
 
 String historyGraphHtml(Integer devNum=null, dev){
 //Logger("HistoryG 1")
-	String html = ""
-	if(true){
-		if (state."TtempTbl${dev.id}"?.size() > 0 && state."TEnergyTbl${dev.id}"?.size() > 0){
-			String tempStr = getTempUnitStr()
-			def minval = getMinTemp("TtempTbl${dev.id}")
-			String minstr = "minValue: ${minval},"
+	String html
+	if (state."TtempTbl${dev.id}"?.size() > 0 && state."TEnergyTbl${dev.id}"?.size() > 0){
+		String tempStr = getTempUnitStr()
+		def minval = getMinTemp("TtempTbl${dev.id}")
+		String minstr// = "minValue: ${minval},"
 //Logger("HistoryG 1a")
 
-			def maxval = getMaxTemp("TtempTbl${dev.id}")
-			String maxstr = "maxValue: ${maxval},"
+		def maxval = getMaxTemp("TtempTbl${dev.id}")
+		String maxstr// = "maxValue: ${maxval},"
 //Logger("HistoryG 1b")
 
-			def differ = maxval - minval
-			//LogAction("differ ${differ}", "trace")
-			minstr = "minValue: ${(minval - (wantMetric() ? 2:5))},"
-			maxstr = "maxValue: ${(maxval + (wantMetric() ? 2:5))},"
+		//def differ = maxval - minval
+		//LogAction("differ ${differ}", "trace")
+		minstr = "minValue: ${(minval - (wantMetric() ? 2:5))},"
+		maxstr = "maxValue: ${(maxval + (wantMetric() ? 2:5))},"
 //Logger("HistoryG 2")
 
-			html = """
-			  <script type="text/javascript">
-				google.charts.load('current', {packages: ['corechart']});
-				google.charts.setOnLoadCallback(drawWeatherGraph);
-				function drawWeatherGraph(){
-					var data = new google.visualization.DataTable();
-					data.addColumn('number', 'day');
-					data.addColumn('number', 'Temp (T)');
-					data.addColumn('number', 'Level');
-					data.addRows([
-						${getDataString(1, dev)}
-						${getDataString(2, dev)}
-					]);
-					var options = {
-						width: '100%',
-						height: '100%',
-						animation: {
-							duration: 1500,
-							startup: true
+		html = """
+		  <script type="text/javascript">
+			google.charts.load('current', {packages: ['corechart']});
+			google.charts.setOnLoadCallback(drawWeatherGraph);
+			function drawWeatherGraph(){
+				var data = new google.visualization.DataTable();
+				data.addColumn('number', 'day');
+				data.addColumn('number', 'Temp (T)');
+				data.addColumn('number', 'Level');
+				data.addRows([
+					${getDataString(1, dev)}
+					${getDataString(2, dev)}
+				]);
+				var options = {
+					width: '100%',
+					height: '100%',
+					animation: {
+						duration: 1500,
+						startup: true
+					},
+					hAxis: {
+						minValue: ${getStartTime("TtempTbl${dev.id}")},
+						slantedText: true,
+						slantedTextAngle: 30
+					},
+					series: {
+						//0: {targetAxisIndex: 1, color: '#FF0000'},
+						//1: {targetAxisIndex: 0, color: '#B8B8B8'},
+						0: {targetAxisIndex: 1, color: '#B8B8B8'},
+						1: {targetAxisIndex: 0, color: '#FF0000'},
+					},
+					vAxes: {
+						0: {
+							title: 'Level (%)',
+							format: 'decimal',
+							minValue: 0,
+							maxValue: 100,
+							textStyle: {color: '#FF0000'},
+							titleTextStyle: {color: '#FF0000'}
 						},
-						hAxis: {
-							minValue: ${getStartTime("TtempTbl${dev.id}")},
-							slantedText: true,
-							slantedTextAngle: 30
-						},
-						series: {
-							//0: {targetAxisIndex: 1, color: '#FF0000'},
-							//1: {targetAxisIndex: 0, color: '#B8B8B8'},
-							0: {targetAxisIndex: 1, color: '#B8B8B8'},
-							1: {targetAxisIndex: 0, color: '#FF0000'},
-						},
-						vAxes: {
-							0: {
-								title: 'Level (%)',
-								format: 'decimal',
-								minValue: 0,
-								maxValue: 100,
-								textStyle: {color: '#FF0000'},
-								titleTextStyle: {color: '#FF0000'}
-							},
-							1: {
-								title: 'Temperature (${tempStr})',
-								format: 'decimal',
-								${minstr}
-								${maxstr}
-								textStyle: {color: '#B8B8B8'},
-								titleTextStyle: {color: '#B8B8B8'}
-							}
-						},
-						legend: {
-							position: 'bottom',
-							maxLines: 6,
-							textStyle: {color: '#000000'}
-						},
-						chartArea: {
-							left: '12%',
-							right: '18%',
-							top: '3%',
-							bottom: '20%',
-							height: '85%',
-							width: '100%'
+						1: {
+							title: 'Temperature (${tempStr})',
+							format: 'decimal',
+							${minstr}
+							${maxstr}
+							textStyle: {color: '#B8B8B8'},
+							titleTextStyle: {color: '#B8B8B8'}
 						}
-					};
-					var chart = new google.visualization.AreaChart(document.getElementById('chart_div${devNum}'));
-					chart.draw(data, options);
-				}
-			</script>
-			<h4 style="font-size: 22px; font-weight: bold; text-align: center; background: #00a1db; color: #f5f5f5;">History</h4>
-			<div id="chart_div${devNum}" style="width: 100%; height: 225px;"></div>
-			"""
-		}else{
-			html = """
-				<h4 style="font-size: 22px; font-weight: bold; text-align: center; background: #00a1db; color: #f5f5f5;">Event History</h4>
-				<br></br>
-				<div class="centerText">
-				<p>Waiting for more data to be collected</p>
-				<p>This may take at a couple hours</p>
-				</div>
-			"""
-		}
+					},
+					legend: {
+						position: 'bottom',
+						maxLines: 6,
+						textStyle: {color: '#000000'}
+					},
+					chartArea: {
+						left: '12%',
+						right: '18%',
+						top: '3%',
+						bottom: '20%',
+						height: '85%',
+						width: '100%'
+					}
+				};
+				var chart = new google.visualization.AreaChart(document.getElementById('chart_div${devNum}'));
+				chart.draw(data, options);
+			}
+		</script>
+		<h4 style="font-size: 22px; font-weight: bold; text-align: center; background: #00a1db; color: #f5f5f5;">History</h4>
+		<div id="chart_div${devNum}" style="width: 100%; height: 225px;"></div>
+		"""
+	}else{
+		html = """
+			<h4 style="font-size: 22px; font-weight: bold; text-align: center; background: #00a1db; color: #f5f5f5;">Event History</h4>
+			<br></br>
+			<div class="centerText">
+			<p>Waiting for more data to be collected</p>
+			<p>This may take at a couple hours</p>
+			</div>
+		"""
 	}
+    return html
 }
 
 /*
@@ -1425,7 +1469,7 @@ Long GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=nu
 *************************************************************************************************/
 
 void LogTrace(String msg, String logSrc=null){
-	Boolean trOn = (showDebug && advAppDebug) ? true : false
+	Boolean trOn = (showDebug && advAppDebug)
 	if(trOn){
 		Logger(msg, "trace", logSrc)
 	}
@@ -1444,10 +1488,10 @@ void Logger(String msg, String type=null, String logSrc=null, Boolean noLog=fals
 			String labelstr = ""
 			if(state.dbgAppndName == null){
 				def tval = settings.dbgAppndName
-				state.dbgAppndName = (tval || tval == null) ? true : false
+				state.dbgAppndName = (tval || tval == null)
 			}
 			String t0 = app.label
-			if(state.dbgAppndName){ labelstr = "${app.label} | " }
+			if(state.dbgAppndName){ labelstr = t0+" | " }
 			String themsg = labelstr+msg
 			//log.debug "Logger remDiagTest: $msg | $type | $logSrc"
 			switch(myType){

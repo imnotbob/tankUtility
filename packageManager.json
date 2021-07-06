@@ -2,7 +2,7 @@
   "packageName": "tankUtility",
   "author": "nh.schottfam",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2020-05-17",
+  "dateReleased": "2021-07-06",
   "apps": [
     {
       "id": "1fd7d1c5-9a20-4ee2-8734-e8b8c98d4328",
@@ -23,7 +23,7 @@
       "required": true
     }
   ],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "releaseNotes": "Latest release",
   "communityLink": "https://community.hubitat.com/t/tankutility-monitoring-app-and-device/8891"
 }
