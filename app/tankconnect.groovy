@@ -930,7 +930,7 @@ String getWebHeaderHtml(String title, Boolean clipboard=true, Boolean vex=false,
 		<meta name="HandheldFriendly" content="True">
 		<meta name="apple-mobile-web-app-capable" content="yes">
 
-		<title>Tank Untility Graphs ('${location?.name}') - ${title}</title>
+		<title>Tank Utility Graphs ('${location?.name}') - ${title}</title>
 
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 		<link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
