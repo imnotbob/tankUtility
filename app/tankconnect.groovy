@@ -1165,75 +1165,74 @@ def getMaxTemp(tbl1, tbl2=null, tbl3=null, tbl4=null){
 	return list?.max()
 }
 
-
 String getEDeviceTile(Integer devNum=null, dev){
 	//def obs = getApiXUData(dev)
 //	try {
-		if ( ((List)state."TtempTbl${dev.id}")?.size() <= 0 ||
-				((List)state."TEnergyTbl${dev.id}")?.size() <= 0){
-			return hideChartHtml() // hideWeatherHtml()
-		}
+	if ( ((List)state."TtempTbl${dev.id}")?.size() <= 0 ||
+			((List)state."TEnergyTbl${dev.id}")?.size() <= 0){
+		return hideChartHtml() // hideWeatherHtml()
+	}
 //Logger("W1")
-		//String updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
-		//String clientBl = state.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
+	//String updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
+	//String clientBl = state.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
 
-		def temperature
-		def level
-		String lastReadTime
-		def capacity
+	def temperature
+	def level
+	String lastReadTime
+	def capacity
 
-		List devs = state.devices
-		devs.each { mydev ->
-			String deviceid = mydev
-			String dni = getDeviceDNI(deviceid)
-			def deviceData
-			def devData
-			if(dev?.deviceNetworkId == dni){
-				deviceData = state.deviceData
-				devData = deviceData[deviceid]
+	List devs = state.devices
+	devs.each { mydev ->
+		String deviceid = mydev
+		String dni = getDeviceDNI(deviceid)
+		def deviceData
+		def devData
+		if(dev?.deviceNetworkId == dni){
+			deviceData = state.deviceData
+			devData = deviceData[deviceid]
 //				def d1 = getChildDevice(dni)
-				def LastReading = devData.lastReading
-				temperature = LastReading.temperature.toInteger()
-				level = (LastReading.tank).toFloat().round(2)
-				lastReadTime = LastReading.time_iso
-				capacity = devData.capacity
-			}
+			def LastReading = devData.lastReading
+			temperature = LastReading.temperature.toInteger()
+			level = (LastReading.tank).toFloat().round(2)
+			lastReadTime = LastReading.time_iso
+			capacity = devData.capacity
 		}
+	}
 
 //Logger("W2")
 	if(capacity==null || level==null) {return (String)null}
-		def regex1 = /Z/
-		String tt0 = lastReadTime?.replaceAll(regex1,"-0000")
-		Date curConn = tt0 ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", tt0) : null //"Not Available"
+	def regex1 = /Z/
+	String tt0 = lastReadTime?.replaceAll(regex1,"-0000")
+	Date curConn = tt0 ? Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", tt0) : null //"Not Available"
 
-		String formatVal = "MMM d, yyyy h:mm a"
-		def tf = new SimpleDateFormat(formatVal)
-		if(getTimeZone()){ tf.setTimeZone(getTimeZone()) }
-		String curConnFmt = curConn!=null ? tf.format(curConn) : "Not Available"
+	String formatVal = "MMM d, yyyy h:mm a"
+	def tf = new SimpleDateFormat(formatVal)
+	if(getTimeZone()){ tf.setTimeZone(getTimeZone()) }
+	String curConnFmt = curConn!=null ? tf.format(curConn) : "Not Available"
 
-		def gal = (capacity * level/100).toFloat().round(2)
-		List<List> t0 = state."TEnergyTbl${dev.id}"
-		//def t1 = t0?.size() > 1 ? t0[-2] : null
-		List t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
+	def gal = (capacity * level/100).toFloat().round(2)
+	List<List> t0 = state."TEnergyTbl${dev.id}"
+	//def t1 = t0?.size() > 1 ? t0[-2] : null
+	List t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
 //Logger("t1: $t1    t0: ${t0}    2nd ${(t0[-2])[1]}    last  ${(t0[-1])[1]}   3rd  ${t0[-3]}")
-		t1 = (!t1 && t0?.size() > 1) ? t0[-2] : t1
+	t1 = (!t1 && t0?.size() > 1) ? t0[-2] : t1
 //Logger("again t1: $t1    t0: ${t0}")
-		def ylevel = t1 ? t1[1] : 0 
-		def ygal = (capacity * ylevel/100).toFloat().round(2)
-		//def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
-		def used = (ygal-gal).toFloat().round(2)
-		used = (used < -2) ? "${used} (refilled)" : used
+	def ylevel = t1 ? t1[1] : 0
+	def ygal = (capacity * ylevel/100).toFloat().round(2)
+	//def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
+	def used = (ygal-gal).toFloat().round(2)
+	used = (used < -2) ? "${used} (refilled)" : used
 //Logger("used: $used  gal: $gal  ygal: $ygal  ylevel: $ylevel  t1: $t1")
-		def num = 1
-		def te0 = capacity*0.8
-		if(gal >= (te0*0.25)){ num = 2 }
-		if(gal >= (te0*0.45)){ num = 3 }
-		if(gal >= (te0*0.65)){ num = 4 }
-		if(gal >= (te0*0.9)){ num = 5 }
-		//def url = "https://app.tankutility.com/images/tank-${num}.png"
-		String url = "https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/tank-${num}.png".toString()
+	Integer num = 1
+	def te0 = capacity*0.8
+	if(gal >= (te0*0.25)){ num = 2 }
+	if(gal >= (te0*0.45)){ num = 3 }
+	if(gal >= (te0*0.65)){ num = 4 }
+	if(gal >= (te0*0.9)){ num = 5 }
+	//def url = "https://app.tankutility.com/images/tank-${num}.png"
+	String url = "https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/tank-${num}.png".toString()
 
-		def mainHtml = """
+	def mainHtml = """
 			<div class="device">
 				<div class="container">
 					<h4>Tank Details</h4>
@@ -1268,9 +1267,6 @@ String getEDeviceTile(Integer devNum=null, dev){
 	}
 */
 }
-
-
-
 
 
 

@@ -72,7 +72,7 @@ void poll() {
 	parent.pollChildren()
 }
 
-def generateEvent(Map results) {
+def generateEvent(Map<String,Object> results) {
 	results.each { String name, value ->
 		sendEvent(name: name, value: value)
 	}
