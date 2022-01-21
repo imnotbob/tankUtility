@@ -12,8 +12,10 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	July 6, 2021
+ *	January 21, 2022
  */
+//file:noinspection unused
+//file:noinspection GroovyUnusedAssignment
 
 import groovy.json.*
 import java.text.SimpleDateFormat
@@ -33,7 +35,6 @@ definition(
 	oauth:true
 )
 
-@SuppressWarnings('unused')
 static String appVersion() { "0.0.4" }
 
 preferences {
@@ -49,19 +50,16 @@ private static String TankUtilAPIEndPoint(){ return "https://data.tankutility.co
 private static String TankUtilityDataEndPoint(){ return TankUtilAPIEndPoint() }
 private static getChildName(){ return "Tank Utility" }
 
-@SuppressWarnings('unused')
 void installed(){
 	log.info "Installed with settings: ${settings}"
 	initialize()
 }
 
-@SuppressWarnings('unused')
 void updated(){
 	log.info "Updated with settings: ${settings}"
 	initialize()
 }
 
-@SuppressWarnings('unused')
 void uninstalled(){
 	def todelete = getAllChildDevices()
 	todelete.each { deleteChildDevice(it.deviceNetworkId) }
@@ -126,7 +124,6 @@ void initialize(){
 	pollChildren(false)
 }
 
-@SuppressWarnings('unused')
 private settingsPage(){
 	if(!state.access_token){ getAccessToken() }
 	if(!state.access_token){ enableOauth(); getAccessToken() }
@@ -311,7 +308,6 @@ private Map<String,Map> RefreshDeviceStatus(Boolean sync=true){
 	return deviceData
 }
 
-@SuppressWarnings('unused')
 void ahandler(resp, Map edata) {
 	LogTrace("ahandler()")
 	Map<String,Map> deviceData = state.deviceData ?: (Map)[:]
@@ -400,7 +396,6 @@ private Boolean getAPIToken(){
 	return true
 }
 
-@SuppressWarnings('unused')
 void pollChildrenF(){
    pollChildren(false)
 }
@@ -443,12 +438,34 @@ void pollChildren(Boolean updateData=true){
 			def level = (LastReading.tank).toFloat().round(2)
 			def lastReadTime = LastReading.time_iso
 			def capacity = devData.capacity
+			def battery = devData.battery_level
+			def est_fill = devData.estimated_fill_date
+			Double consumption = ((Double)devData.average_consumption)?.round(2)
+
+			def gal = (capacity * level/100).toFloat().round(2)
+			List<List> t0 = state."TEnergyTbl${d.id}"
+			//def t1 = t0?.size() > 1 ? t0[-2] : null
+			List t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
+//Logger("t1: $t1    t0: ${t0}    2nd ${(t0[-2])[1]}    last  ${(t0[-1])[1]}   3rd  ${t0[-3]}")
+			t1 = (!t1 && t0?.size() > 1) ? t0[-2] : t1
+//Logger("again t1: $t1    t0: ${t0}")
+			def ylevel = t1 ? t1[1] : 0
+			def ygal = (capacity * ylevel/100).toFloat().round(2)
+			//def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
+			def used = (ygal-gal).toFloat().round(2)
+			used = (used < -2) ? "${used} (refilled)" : used
+
 			def events = [
 				['temperature': temperature],
 				['level': level],
 				['energy': level],
 				['capacity': capacity],
 				['lastreading': lastReadTime],
+				['gallons': gal],
+				['used': used],
+				['battery': battery!='good '? 5 : 100],
+				['estimatedfill': est_fill],
+				['avgconsumption': consumption],
 			]
 			LogAction("pollChidren: Sending events: ${events}", "info", false)
 			events.each {
@@ -470,7 +487,6 @@ static String strCapitalize(str){
 	return str ? str?.toString()?.capitalize() : (String)null
 }
 
-@SuppressWarnings('unused')
 void automationGenericEvt(evt){
 	Long startTime = now()
 	Long eventDelay = startTime - evt.date.getTime()
@@ -610,7 +626,6 @@ Integer getAutoRunSec(){ return !state.autoRunDt ? 100000 : GetTimeDiffSeconds((
 
 Integer getAutoRunInSec(){ return !state.autoRunInSchedDt ? 100000 : GetTimeDiffSeconds((String)state.autoRunInSchedDt, null, "getAutoRunInSec").toInteger() }
 
-@SuppressWarnings('unused')
 void runAutomationEval(){
 	LogTrace("runAutomationEval")
 	Long execTime = now()
@@ -697,7 +712,7 @@ void getSomeData(dev, temperature, level){
 	Date newDate = new Date()
 	if(newDate == null){ Logger("got null for new Date()") }
 
-	Integer dayNum = newDate.format("D", location.timeZone) as Integer
+	Integer dayNum = newDate.format("D", (TimeZone)location.timeZone) as Integer
 //	def hr = newDate.format("H", location.timeZone) as Integer
 //	def mins = newDate.format("m", location.timeZone) as Integer
 
@@ -726,7 +741,6 @@ static List addValue(List<List> table, Integer dayNum, val){
 }
 
 
-@SuppressWarnings('unused')
 def getTile(){
 	LogTrace ("getTile()")
 	String responseMsg
@@ -978,7 +992,6 @@ String getAutoType(){
 	return state.autoTyp ?: (String)null
 }
 
-@SuppressWarnings('unused')
 String getAutomationType(){
 	return state.autoTyp ?: (String)null
 }
@@ -1069,12 +1082,10 @@ String getAppImg(String imgName, Boolean on = null){
 	return (!disAppIcons || on) ? icons(imgName) : ""
 }
 
-@SuppressWarnings('unused')
 String getDevImg(String imgName, Boolean on = null){
 	return (!disAppIcons || on) ? icons(imgName, "Devices") : ""
 }
 
-@SuppressWarnings('unused')
 void logsOff(){
 	Logger("debug logging disabled...")
 	settingUpdate("showDebug", "false", "bool")
@@ -1098,7 +1109,6 @@ void settingRemove(String name){
 	if(name){ app?.clearSetting(name.toString()) }
 }
 
-@SuppressWarnings('unused')
 def stateRemove(key){
 	//if(state.containsKey(key)){ state.remove(key?.toString()) }
 	state.remove(key?.toString())

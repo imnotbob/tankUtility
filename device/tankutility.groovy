@@ -1,6 +1,7 @@
 metadata {
 	definition (name: "Tank Utility", namespace: "imnotbob" , author: "Eric S") {
 		capability "Energy Meter"
+		capability "Battery"
 		capability "Polling"
 		capability "Refresh"
 		capability "Sensor"
@@ -10,6 +11,10 @@ metadata {
 		attribute "lastreading", "date"
 		attribute "capacity", "number"
 		attribute "level", "number"
+		attribute "gallons", "number"
+		attribute "used", "string"
+		attribute "estimatedfill", "string"
+		attribute 'avgconsumption', "number"
 	}
 
 /*
