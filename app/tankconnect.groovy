@@ -12,7 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	January 21, 2022
+ *	May 10, 2022
  */
 //file:noinspection unused
 //file:noinspection GroovyUnusedAssignment
@@ -463,7 +463,7 @@ void pollChildren(Boolean updateData=true){
 				['lastreading': lastReadTime],
 				['gallons': gal],
 				['used': used],
-				['battery': battery!='good '? 5 : 100],
+				['battery': battery!='good'? 5 : 100],
 				['estimatedfill': est_fill],
 				['avgconsumption': consumption],
 			]
