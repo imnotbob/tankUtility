@@ -12,7 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	May 10, 2022
+ *	February 4, 2023
  */
 //file:noinspection unused
 //file:noinspection GroovyUnusedAssignment
@@ -35,7 +35,7 @@ definition(
 	oauth:true
 )
 
-static String appVersion() { "0.0.4" }
+static String appVersion() { "0.0.5" }
 
 preferences {
 	page(name: "settings", title: "Settings", content: "settingsPage", install:true)
@@ -69,7 +69,7 @@ void initialize(){
 	LogTrace("initialize")
 
 	settingUpdate("showDebug", "true", "bool")
-	Boolean traceWasOn = false
+	Boolean traceWasOn; traceWasOn = false
 	if(settings.advAppDebug){
 		traceWasOn = true
 	}
@@ -87,13 +87,13 @@ void initialize(){
 
 	List<String> devs = getDevices()
 	Map<String,Map> devicestatus = RefreshDeviceStatus()
-	Boolean quickOut = false
+	Boolean quickOut; quickOut = false
 	devs.each { String dev ->
 		String ChildName = getChildName()
 		String TUDeviceID = dev
 		String dni = getDeviceDNI(TUDeviceID)
 		Map devinfo = devicestatus[TUDeviceID]
-		def d = getChildDevice(dni)
+		def d; d = getChildDevice(dni)
 		if(!d){
 			d = addChildDevice("imnotbob", ChildName, dni, null, ["label": devinfo.name ?: ChildName])
 			LogAction("created ${d.displayName} with dni: ${dni}", "info", true)
@@ -132,7 +132,7 @@ private settingsPage(){
 	 	Boolean message = getToken()
 		if(!message){
 			section("Authentication"){
-				paragraph "${state.lastErr} Enter your TankUtility Username and Password."
+				paragraph "${state.lastErr} \n\nEnter your TankUtility Username and Password."
 				input "UserName", "string", title: "Tank Utility Username", required: true
 				input "Password", "string", title: "Tank Utility Password", required: true, submitOnChange: true
 			}
@@ -142,7 +142,7 @@ private settingsPage(){
 			}
 
 			section(){
-				List devs = state.devices
+				List devs; devs = (List)state.devices
 				if(!devs){
 					devs = getDevices()
 					Map devicestatus = RefreshDeviceStatus()
@@ -162,12 +162,12 @@ private settingsPage(){
 					if(!d1){ return }
 // Likely should let someone select which tanks are created here.
 /*
-					def deviceData = state.deviceData
-					def devData = deviceData[deviceid]
-					def LastReading = devData.lastReading
+					Map<String,Map> deviceData = state.deviceData
+					Map devData = deviceData[deviceid]
+					Map LastReading = (Map)devData.lastReading
 					def temperature = LastReading.temperature.toInteger()
 					def level = (LastReading.tank).toFloat().round(2)
-					def lastReadTime = LastReading.time_iso
+					String lastReadTime = LastReading.time_iso
 					def capacity = devData.capacity
 					def events = [
 						['temperature': temperature],
@@ -217,13 +217,13 @@ private settingsPage(){
 
 List<String> getDevices(){
 	LogTrace("getDevices")
-	List<String> devices = []
+	List<String> devices; devices = []
 
 	if(!getToken()){
 		LogAction("getDevice: no token available", "info", true)
 		return devices
 	}
-	def Params = [
+	Map Params = [
 		uri: TankUtilityDataEndPoint(),
 		path: "/api/devices",
 		query: [
@@ -257,7 +257,7 @@ List<String> getDevices(){
 
 private Map<String,Map> RefreshDeviceStatus(Boolean sync=true){
 	LogTrace("RefreshDeviceStatus()")
-	Map<String,Map> deviceData = state.deviceData ?: (Map)[:]
+	Map<String,Map> deviceData = (Map<String,Map>)state.deviceData ?: [:]
 
 	if(!getToken()){
 		LogAction("RefreshDeviceStatus: no token available", "info", true)
@@ -273,7 +273,7 @@ private Map<String,Map> RefreshDeviceStatus(Boolean sync=true){
 
 	devices.each {String dev ->
 		//String dni = getDeviceDNI(dev)
-		def Params = [
+		Map Params = [
 			uri: TankUtilityDataEndPoint(),
 			path: "/api/devices/${dev}",
 			query: [
@@ -310,7 +310,7 @@ private Map<String,Map> RefreshDeviceStatus(Boolean sync=true){
 
 void ahandler(resp, Map edata) {
 	LogTrace("ahandler()")
-	Map<String,Map> deviceData = state.deviceData ?: (Map)[:]
+	Map<String,Map> deviceData = (Map<String,Map>)state.deviceData ?: [:]
 	Integer responseCode = resp.status
 	if (responseCode == 200 && resp.data) {
 		String dev = edata.a
@@ -330,7 +330,7 @@ void ahandler(resp, Map edata) {
 
 private Boolean getToken(){
 	LogTrace("getToken()")
-	Boolean message = true
+	Boolean message; message = true
 	if(!settings.UserName || !settings.Password){
 		LogAction("getToken no password", "warn", false)
 		return false
@@ -363,7 +363,7 @@ private String getBase64AuthString(){
 
 private Boolean getAPIToken(){
 	log.trace "getAPIToken()Requesting an API Token!"
-	def Params = [
+	Map Params = [
 		uri: TankUtilAPIEndPoint(),
 		path: "/api/getToken",
 		headers: ['Authorization': "Basic ${getBase64AuthString()}"],
@@ -412,7 +412,7 @@ void pollChildren(Boolean updateData=true){
 		LogAction("pollChilcren: no devices available", "warn", true)
 		return
 	}
-	Map deviceData
+	Map<String,Map> deviceData
 	if(updateData){
 		deviceData = RefreshDeviceStatus(false)
 		return
@@ -428,34 +428,36 @@ void pollChildren(Boolean updateData=true){
 				LogAction("pollChilcren: no device found $dni", "warn", true)
 				return false
 			}
-			def devData = deviceData[deviceid]
+			Map devData = deviceData[deviceid]
 			if(!devData){
 				LogAction("pollChilcren: no device data available $d.label", "warn", true)
 				return false
 			}
-			def LastReading = devData.lastReading
+			Map LastReading = (Map)devData.lastReading
 			def temperature = LastReading.temperature.toInteger()
 			def level = (LastReading.tank).toFloat().round(2)
-			def lastReadTime = LastReading.time_iso
+			String lastReadTime = LastReading.time_iso
 			def capacity = devData.capacity
 			def battery = devData.battery_level
 			def est_fill = devData.estimated_fill_date
 			Double consumption = ((Double)devData.average_consumption)?.round(2)
 
 			def gal = (capacity * level/100).toFloat().round(2)
-			List<List> t0 = state."TEnergyTbl${d.id}"
+			List<List> t0 = (List<List>)state."TEnergyTbl${d.id}"
 			//def t1 = t0?.size() > 1 ? t0[-2] : null
-			List t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
+			List t1
+			t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
 //Logger("t1: $t1    t0: ${t0}    2nd ${(t0[-2])[1]}    last  ${(t0[-1])[1]}   3rd  ${t0[-3]}")
 			t1 = (!t1 && t0?.size() > 1) ? t0[-2] : t1
 //Logger("again t1: $t1    t0: ${t0}")
 			def ylevel = t1 ? t1[1] : 0
 			def ygal = (capacity * ylevel/100).toFloat().round(2)
 			//def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
-			def used = (ygal-gal).toFloat().round(2)
+			def used
+			used = (ygal-gal).toFloat().round(2)
 			used = (used < -2) ? "${used} (refilled)" : used
 
-			def events = [
+			List<Map> events = [
 				['temperature': temperature],
 				['level': level],
 				['energy': level],
@@ -504,11 +506,11 @@ void doTheEvent(evt){
 
 void storeLastEventData(evt){
 	if(evt){
-		def newVal = ["name":evt.name, "displayName":evt.displayName, "value":evt.value, "date":formatDt(evt.date), "unit":evt.unit]
+		def newVal = ["name":evt.name, "displayName":evt.displayName, "value":evt.value, "date":formatDt((Date)evt.date), "unit":evt.unit]
 		state.lastEventData = newVal
 		//log.debug "LastEvent: ${state.lastEventData}"
 
-		List list = state.detailEventHistory ?: []
+		List list; list = state.detailEventHistory ?: []
 		Integer listSize = 10
 		if(list?.size() < listSize){
 			list.push(newVal)
@@ -536,16 +538,16 @@ void storeExecutionHistory(val, String method = null){
 		}
 		if(method in ["watchDogCheck", "checkNestMode", "schMotCheck"]){
 			state.autoExecMS = val ?: null
-			List list = state.evalExecutionHistory ?: []
+			List list; list = (List)state.evalExecutionHistory ?: []
 			Integer listSize = 20
 			list = addToList(val, list, listSize)
 			if(list){ state.evalExecutionHistory = list }
 		}
 		//if(!(method in ["watchDogCheck", "checkNestMode"])){
-			List list = state.detailExecutionHistory ?: []
-			Integer listSize = 15
-			list = addToList([val, method, getDtNow()], list, listSize)
-			if(list){ state.detailExecutionHistory = list }
+		List list; list = (List)state.detailExecutionHistory ?: []
+		Integer listSize = 15
+		list = addToList([val, method, getDtNow()], list, listSize)
+		if(list){ state.detailExecutionHistory = list }
 		//}
 /*
 	} catch (ex){
@@ -555,7 +557,8 @@ void storeExecutionHistory(val, String method = null){
 */
 }
 
-static List addToList(val, list, Integer listSize){
+static List addToList(val, List ilist, Integer listSize){
+	List list; list=[]+ilist
 	if(list?.size() < listSize){
 		list.push(val)
 	} else if(list?.size() > listSize){
@@ -576,18 +579,18 @@ static Integer defaultAutomationTime(){
 }
 
 void scheduleAutomationEval(Integer schedtime = defaultAutomationTime()){
-	Integer theTime = schedtime
+	Integer theTime; theTime = schedtime
 	if(theTime < defaultAutomationTime()){ theTime = defaultAutomationTime() }
 	String autoType = getAutoType()
 	def random = new Random()
 	Integer random_int = random.nextInt(6)  // this randomizes a bunch of automations firing at same time off same event
-	Boolean waitOverride = false
+	Boolean waitOverride; waitOverride = false
 	switch(autoType){
 		case "chart":
 			if(theTime == defaultAutomationTime()){
 				theTime += random_int
 			}
-			Integer schWaitVal = settings.schMotWaitVal?.toInteger() ?: 60
+			Integer schWaitVal; schWaitVal = settings.schMotWaitVal?.toInteger() ?: 60
 			if(schWaitVal > 120){ schWaitVal = 120 }
 			Integer t0 = getAutoRunSec()
 			if((schWaitVal - t0) >= theTime ){
@@ -604,9 +607,9 @@ void scheduleAutomationEval(Integer schedtime = defaultAutomationTime()){
 		state.evalSchedLastTime = theTime
 	}else{
 		String str = "scheduleAutomationEval: "
-		Integer t0 = state.evalSchedLastTime
+		Integer t0; t0 = (Integer)state.evalSchedLastTime
 		if(t0 == null){ t0 = 0 }
-		Integer timeLeftPrev = t0 - getAutoRunInSec()
+		Integer timeLeftPrev; timeLeftPrev = t0 - getAutoRunInSec()
 		if(timeLeftPrev < 0){ timeLeftPrev = 100 }
 		String str1 = " Schedule change: from (${timeLeftPrev}sec) to (${theTime}sec)"
 		if(timeLeftPrev > (theTime + 5) || waitOverride){
@@ -637,14 +640,14 @@ void runAutomationEval(){
 			List devs = state.devices
 			devs.each { dev ->
 				String deviceid = dev
-				def deviceData = state.deviceData
-				def devData = deviceData[deviceid]
-				def LastReading = devData.lastReading
+				Map<String,Map> deviceData = state.deviceData
+				Map devData = deviceData[deviceid]
+				Map LastReading = (Map)devData.lastReading
 				String dni = getDeviceDNI(deviceid)
 				def d1 = getChildDevice(dni)
 				Integer temperature = LastReading.temperature.toInteger()
 				def level = (LastReading.tank).toFloat().round(2)
-//				def lastReadTime = LastReading.time_iso
+//				String lastReadTime = LastReading.time_iso
 //				def capacity = devData.capacity
 /*
 				def events = [
@@ -706,8 +709,8 @@ void getSomeData(dev, temperature, level){
 		state."TEnergyTbl${dev.id}" = []
 	}
 
-	List tempTbl = state."TtempTbl${dev.id}"
-	List energyTbl = state."TEnergyTbl${dev.id}"
+	List tempTbl = (List)state."TtempTbl${dev.id}"
+	List energyTbl = (List)state."TEnergyTbl${dev.id}"
 
 	Date newDate = new Date()
 	if(newDate == null){ Logger("got null for new Date()") }
@@ -721,7 +724,8 @@ void getSomeData(dev, temperature, level){
 }
 
 static List addValue(List<List> table, Integer dayNum, val){
-	List<List> newTable = table
+	List<List> newTable
+	newTable = table
 	if(table?.size()){
 		Integer lastDay = table.last()[0]
 /*
@@ -764,10 +768,12 @@ def getTile(){
 def renderDeviceTiles(type=null, theDev=null){
 	Long execTime = now()
 //	try {
-		String devHtml = ""
-		String navHtml = ""
-		String scrStr = ""
-		def allDevices = []
+		String devHtml, navHtml, scrStr
+		devHtml = ""
+		navHtml = ""
+		scrStr = ""
+		List allDevices
+		allDevices = []
 		if(theDev){
 			allDevices << theDev
 		}else{
@@ -775,8 +781,8 @@ def renderDeviceTiles(type=null, theDev=null){
 		}
 
 
-		def devices = allDevices
-		Integer devNum = 1
+		List devices = allDevices
+		Integer devNum; devNum = 1
 		String myType = type ?: "All Devices"
 		devices?.sort {it?.getLabel()}?.each { dev ->
 			Map navMap
@@ -807,7 +813,7 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 			}
 		}
 
-		String myTitle = "All Devices"
+		String myTitle; myTitle = "All Devices"
 		myTitle = type ? "${type}s" : myTitle
 		myTitle = theDev ? "Tank Chart" : myTitle
 		String html = """
@@ -898,8 +904,9 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 
 static Map navHtmlBuilder(Map navMap, Integer idNum){
 	Map res = [:]
-	String htmlStr = ""
-	String jsStr = ""
+	String htmlStr, jsStr
+	htmlStr = ""
+	jsStr = ""
 	if(navMap?.key){
 		htmlStr += """
 			<div class="nav-cont-bord-div nav-menu">
@@ -934,7 +941,8 @@ static String navJsBuilder(String btnId, String divId){
 
 
 String getWebHeaderHtml(String title, Boolean clipboard=true, Boolean vex=false, Boolean swiper=false, Boolean charts=false){
-	String html = """
+	String html
+	html = """
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 		<meta name="description" content="NST Graphs">
@@ -989,11 +997,11 @@ static String hideChartHtml(){
 }
 
 String getAutoType(){
-	return state.autoTyp ?: (String)null
+	return (String)state.autoTyp ?: (String)null
 }
 
 String getAutomationType(){
-	return state.autoTyp ?: (String)null
+	return (String)state.autoTyp ?: (String)null
 }
 
 String getAppEndpointUrl(String subPath){ return "${getFullApiServerUrl()}${subPath ? "/${subPath}" : ""}?access_token=${state.access_token}" }
@@ -1053,7 +1061,7 @@ static String imgTitle(String imgSrc, String titleStr, String color=null, Intege
 }
 
 static String icons(String name, String napp="App"){
-	def icon_names = [
+	Map<String,String> icon_names = [
 		"i_dt": "delay_time",
 		"i_not": "notification",
 		"i_calf": "cal_filter",
@@ -1068,7 +1076,7 @@ static String icons(String name, String napp="App"){
 
 	]
 	//return icon_names[name]
-	String t0 = icon_names?."${name}"
+	String t0 = icon_names."${name}"
 	//LogAction("t0 ${t0}", "warn", true)
 	if(t0) return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${t0}_icon.png".toString()
 	else return "https://raw.githubusercontent.com/${gitPath()}/Images/$napp/${name}".toString()
@@ -1116,7 +1124,7 @@ def stateRemove(key){
 }
 
 def setAutomationStatus(Boolean upd=false){
-	Boolean myDis = (settings.autoDisabledreq == true)
+	Boolean myDis; myDis = (settings.autoDisabledreq == true)
 	Boolean settingsReset = false // (parent.getSettingVal("disableAllAutomations") == true)
 	Boolean storAutoType = getAutoType() == "storage"
 	if(settingsReset && !storAutoType){
@@ -1143,11 +1151,11 @@ Boolean getIsAutomationDisabled(){
 
 // getStartTime("dewTbl", "dewTblYest"))
 def getStartTime(String tbl1, String tbl2=(String)null){
-	Integer startTime = 24
+	Integer startTime; startTime = 24
 	if ( ((List)state."${tbl1}")?.size()){
 		startTime = (Integer)(((List<List>)state."${tbl1}").min{it[0].toInteger()}[0].toInteger())
 	}
-	if (state."${tbl2}"?.size()){
+	if ( ((List)state."${tbl2}")?.size()){
 		startTime = Math.min(startTime, (Integer)(((List<List>)state."${tbl2}").min{it[0].toInteger()}[0].toInteger()) )
 	}
 	return startTime
@@ -1186,22 +1194,23 @@ String getEDeviceTile(Integer devNum=null, dev){
 	//String updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
 	//String clientBl = state.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
 
-	def temperature
+	def temperature; temperature=0
 	def level
-	String lastReadTime
+	String lastReadTime; lastReadTime=(String)null
 	def capacity
 
 	List devs = state.devices
 	devs.each { mydev ->
 		String deviceid = mydev
 		String dni = getDeviceDNI(deviceid)
-		def deviceData
-		def devData
+		Map<String,Map> deviceData
+		Map devData
 		if(dev?.deviceNetworkId == dni){
-			deviceData = state.deviceData
+			deviceData = (Map<String,Map>)state.deviceData
 			devData = deviceData[deviceid]
 //				def d1 = getChildDevice(dni)
-			def LastReading = devData.lastReading
+			Map LastReading = (Map)devData.lastReading
+			//noinspection GrReassignedInClosureLocalVar
 			temperature = LastReading.temperature.toInteger()
 			level = (LastReading.tank).toFloat().round(2)
 			lastReadTime = LastReading.time_iso
@@ -1221,19 +1230,21 @@ String getEDeviceTile(Integer devNum=null, dev){
 	String curConnFmt = curConn!=null ? tf.format(curConn) : "Not Available"
 
 	def gal = (capacity * level/100).toFloat().round(2)
-	List<List> t0 = state."TEnergyTbl${dev.id}"
+	List<List> t0 = (List<List>)state."TEnergyTbl${dev.id}"
 	//def t1 = t0?.size() > 1 ? t0[-2] : null
-	List t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
+	List t1
+	t1 = t0?.size() > 2 && (t0[-2])[1].toFloat().round(2) == (t0[-1])[1].toFloat().round(2) ? t0[-3] : null
 //Logger("t1: $t1    t0: ${t0}    2nd ${(t0[-2])[1]}    last  ${(t0[-1])[1]}   3rd  ${t0[-3]}")
 	t1 = (!t1 && t0?.size() > 1) ? t0[-2] : t1
 //Logger("again t1: $t1    t0: ${t0}")
 	def ylevel = t1 ? t1[1] : 0
 	def ygal = (capacity * ylevel/100).toFloat().round(2)
 	//def used = gal <= ygal ? (ygal-gal).toFloat().round(2) : "refilled"
-	def used = (ygal-gal).toFloat().round(2)
+	def used
+	used = (ygal-gal).toFloat().round(2)
 	used = (used < -2) ? "${used} (refilled)" : used
 //Logger("used: $used  gal: $gal  ygal: $ygal  ylevel: $ylevel  t1: $t1")
-	Integer num = 1
+	Integer num; num = 1
 	def te0 = capacity*0.8
 	if(gal >= (te0*0.25)){ num = 2 }
 	if(gal >= (te0*0.45)){ num = 3 }
@@ -1242,7 +1253,7 @@ String getEDeviceTile(Integer devNum=null, dev){
 	//def url = "https://app.tankutility.com/images/tank-${num}.png"
 	String url = "https://raw.githubusercontent.com/imnotbob/tankUtility/master/Images/tank-${num}.png".toString()
 
-	def mainHtml = """
+	String mainHtml = """
 			<div class="device">
 				<div class="container">
 					<h4>Tank Details</h4>
@@ -1267,15 +1278,7 @@ String getEDeviceTile(Integer devNum=null, dev){
 			</div>
 
 		"""
-/* """ */
-//	      render contentType: "text/html", data: mainHtml, status: 200
-/*
-	}
-	catch (ex){
-		log.error "getDeviceTile Exception:", ex
-		//exceptionDataHandler(ex?.message, "getDeviceTile")
-	}
-*/
+	return mainHtml
 }
 
 
@@ -1289,8 +1292,9 @@ String getEDeviceTile(Integer devNum=null, dev){
 */
 
 String getDataString(Integer seriesIndex, dev){
-	String dataString = ""
-	List<List> dataTable = []
+	String dataString; dataString = ""
+	List<List> dataTable
+	dataTable = []
 	switch (seriesIndex){
 		case 1:
 			dataTable = (List<List>)state."TtempTbl${dev.id}"
@@ -1424,7 +1428,7 @@ def hideWeatherHtml(){
 Boolean wantMetric(){ return (getTemperatureScale() == "C") }
 
 String getTempUnitStr(){
-	String tempStr = "\u00b0F"
+	String tempStr; tempStr = "\u00b0F"
 	if(wantMetric()){
 		tempStr = "\u00b0C"
 	}
@@ -1433,9 +1437,9 @@ String getTempUnitStr(){
 
 
 
-def getTimeZone(){
-	def tz = null
-	if(location?.timeZone){ tz = location?.timeZone }
+TimeZone getTimeZone(){
+	TimeZone tz; tz = null
+	if(location?.timeZone){ tz = location.timeZone }
 	if(!tz){ LogAction("getTimeZone: Hub or Nest TimeZone not found", "warn", true) }
 	return tz
 }
@@ -1445,8 +1449,8 @@ String getDtNow(){
 	return formatDt(now)
 }
 
-String formatDt(dt){
-	def tf = new SimpleDateFormat("E MMM dd HH:mm:ss z yyyy")
+String formatDt(Date dt){
+	SimpleDateFormat tf = new SimpleDateFormat("E MMM dd HH:mm:ss z yyyy")
 	if(getTimeZone()){ tf.setTimeZone(getTimeZone()) }
 	else {
 		LogAction("HE TimeZone is not set; Please open your location and Press Save", "warn", true)
@@ -1463,7 +1467,7 @@ Long GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=nu
 		String stopVal = stpDate ? stpDate.toString() : formatDt(now)
 		Long start = Date.parse("E MMM dd HH:mm:ss z yyyy", strtDate).getTime()
 		Long stop = Date.parse("E MMM dd HH:mm:ss z yyyy", stopVal).getTime()
-		Long diff = (stop - start) / 1000L
+		Long diff = Math.round((stop - start) / 1000L)
 		LogTrace("[GetTimeDiffSeconds] Results for '$methName': ($diff seconds)")
 		return diff
 	}else{ return null }
@@ -1491,7 +1495,8 @@ void Logger(String msg, String type=null, String logSrc=null, Boolean noLog=fals
 	String myType = type ?: "debug"
 	if(!noLog){
 		if(msg && myType){
-			String labelstr = ""
+			String labelstr
+			labelstr = ""
 			if(state.dbgAppndName == null){
 				def tval = settings.dbgAppndName
 				state.dbgAppndName = (tval || tval == null)
