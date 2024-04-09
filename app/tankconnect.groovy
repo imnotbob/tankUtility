@@ -12,10 +12,11 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	February 4, 2023
+ *	March 30, 2024
  */
 //file:noinspection unused
 //file:noinspection GroovyUnusedAssignment
+//file:noinspection SpellCheckingInspection
 
 import groovy.json.*
 import java.text.SimpleDateFormat
@@ -234,8 +235,10 @@ List<String> getDevices(){
 	
 	try {
 		httpGet(Params){ resp ->
-			if(resp.status == 200){	
-				resp.data.devices.each { dev ->
+			if(resp.status == 200){
+				String a= ((StringReader)resp.data).getText()
+				Map data= (Map)(new JsonSlurper().parseText(a))
+				((List<String>)data.devices).each { dev ->
 					String dni = [app.id, dev].join('.')
 					LogAction("Found device ID: ${dni}", "debug", false)
 					devices += dev
@@ -266,7 +269,7 @@ private Map<String,Map> RefreshDeviceStatus(Boolean sync=true){
 	}
 	List<String> devices = state.devices
 	if(!devices){
-		LogAction("RefreshDeviceState: no devices avaiable", "warn", true)
+		LogAction("RefreshDeviceState: no devices available", "warn", true)
 		state.deviceData = [:]
 		return [:]
 	}
@@ -285,7 +288,9 @@ private Map<String,Map> RefreshDeviceStatus(Boolean sync=true){
 			try {
 				httpGet(Params){ resp ->
 					if(resp.status == 200){
-						deviceData[dev] = (Map)resp.data.device
+						String a= ((StringReader)resp.data).getText()
+						Map data= (Map)(new JsonSlurper().parseText(a))
+						deviceData[dev] = (Map)data.device
 						LogTrace("RefreshDeviceStatus: received device data for ${dev} = ${deviceData[dev]}")
 					}else{
 						LogAction("RefreshDeviceStatus: Error while receiving events ${resp.status}", "error", true)
@@ -346,7 +351,7 @@ private Boolean getToken(){
 }
 
 Boolean isTokenExpired(){
-	Long currentDate = now()
+	Long currentDate = wnow()
 	if (!state.APITokenExpirationTime){
 		return true
 	}else{
@@ -361,6 +366,8 @@ private String getBase64AuthString(){
 	return authorize_encoded
 }
 
+private Long wnow() { return (Long)now() }
+
 private Boolean getAPIToken(){
 	log.trace "getAPIToken()Requesting an API Token!"
 	Map Params = [
@@ -372,11 +379,13 @@ private Boolean getAPIToken(){
 
 	try {
 		httpGet(Params){ resp ->
-			LogAction("getToken Return Code: ${resp.status} Response: ${resp.data}", "debug", false)
+			String a= ((StringReader)resp.data).getText()
+			LogAction("getToken Return Code: ${resp.status} Response: ${a}", "debug", false)
 			if(resp.status == 200){
-				if (resp.data.token){
-					state.APIToken = resp?.data?.token
-					state.APITokenExpirationTime = now() + (24L * 60 * 60 * 1000)
+				if (a){
+					Map data= (Map)(new JsonSlurper().parseText(a))
+					state.APIToken = data?.token
+					state.APITokenExpirationTime = wnow() + (24L * 60 * 60 * 1000)
 					LogAction("Token refresh Success. Token expires at ${state.APITokenExpirationTime}", "info", false)
 					state.lastErr=""
 					return true
@@ -401,7 +410,7 @@ void pollChildrenF(){
 }
 
 void pollChildren(Boolean updateData=true){
-	Long execTime = now()
+	Long execTime = wnow()
 	LogTrace("pollChildren $updateData")
 	if(!getToken()){
 		LogAction("pollChilcren: Was not able to refresh API token expired at ${state.APITokenExpirationTime}.", "warn", true)
@@ -478,7 +487,7 @@ void pollChildren(Boolean updateData=true){
 			log.error "pollChildren: Error while sending  events for pollChildren: ${e}"
 		}
 	}
-	storeExecutionHistory((now()-execTime), "pollChildren")
+	storeExecutionHistory((wnow()-execTime), "pollChildren")
 }
 
 String getDeviceDNI(String DeviceID){
@@ -490,7 +499,7 @@ static String strCapitalize(str){
 }
 
 void automationGenericEvt(evt){
-	Long startTime = now()
+	Long startTime = wnow()
 	Long eventDelay = startTime - evt.date.getTime()
 	LogAction("${evt.name.toUpperCase()} Event | Device: ${evt?.displayName} | Value: (${strCapitalize(evt?.value)}) with a delay of ${eventDelay}ms", "info", false)
 
@@ -631,7 +640,7 @@ Integer getAutoRunInSec(){ return !state.autoRunInSchedDt ? 100000 : GetTimeDiff
 
 void runAutomationEval(){
 	LogTrace("runAutomationEval")
-	Long execTime = now()
+	Long execTime = wnow()
 	String autoType = getAutoType()
 	state.evalSched = false
 	state.evalSchedLastTime = null
@@ -698,7 +707,7 @@ void runAutomationEval(){
 			LogAction("runAutomationEval: Invalid Option Received ${autoType}", "warn", true)
 			break
 	}
-	storeExecutionHistory((now()-execTime), "runAutomationEval")
+	storeExecutionHistory((wnow()-execTime), "runAutomationEval")
 }
 
 
@@ -766,7 +775,7 @@ def getTile(){
 }
 
 def renderDeviceTiles(type=null, theDev=null){
-	Long execTime = now()
+	Long execTime = wnow()
 //	try {
 		String devHtml, navHtml, scrStr
 		devHtml = ""
@@ -897,7 +906,7 @@ LogTrace("renderDeviceTiles: ${dev.id} ${dev.name} ${theDev?.name} ${dev.typeNam
 		</html>
 		"""
 /* """ */
-		storeExecutionHistory((now()-execTime), "renderDeviceTiles")
+		storeExecutionHistory((wnow()-execTime), "renderDeviceTiles")
 		render contentType: "text/html", data: html
 //	} catch (ex){ log.error "renderDeviceData Exception:", ex }
 }
@@ -1436,30 +1445,32 @@ String getTempUnitStr(){
 }
 
 
+private static TimeZone mTZ(){ return TimeZone.getDefault() } // (TimeZone)location.timeZone
 
-TimeZone getTimeZone(){
-	TimeZone tz; tz = null
+static TimeZone getTimeZone(){
+	return mTZ()
+/*	TimeZone tz; tz = null
 	if(location?.timeZone){ tz = location.timeZone }
 	if(!tz){ LogAction("getTimeZone: Hub or Nest TimeZone not found", "warn", true) }
-	return tz
+	return tz*/
 }
 
-String getDtNow(){
+static String getDtNow(){
 	Date now = new Date()
 	return formatDt(now)
 }
 
-String formatDt(Date dt){
+static String formatDt(Date dt){
 	SimpleDateFormat tf = new SimpleDateFormat("E MMM dd HH:mm:ss z yyyy")
 	if(getTimeZone()){ tf.setTimeZone(getTimeZone()) }
-	else {
+/*	else {
 		LogAction("HE TimeZone is not set; Please open your location and Press Save", "warn", true)
 		return ""
-	}
+	} */
 	return tf.format(dt)
 }
 
-Long GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=null){
+static Long GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=null){
 	//LogTrace("[GetTimeDiffSeconds] StartDate: $strtDate | StopDate: ${stpDate ?: "Not Sent"} | MethodName: ${methName ?: "Not Sent"})")
 	if((strtDate && !stpDate) || (strtDate && stpDate)){
 		//if(strtDate?.contains("dtNow")){ return 10000 }
@@ -1468,7 +1479,7 @@ Long GetTimeDiffSeconds(String strtDate, String stpDate=null, String methName=nu
 		Long start = Date.parse("E MMM dd HH:mm:ss z yyyy", strtDate).getTime()
 		Long stop = Date.parse("E MMM dd HH:mm:ss z yyyy", stopVal).getTime()
 		Long diff = Math.round((stop - start) / 1000L)
-		LogTrace("[GetTimeDiffSeconds] Results for '$methName': ($diff seconds)")
+		//LogTrace("[GetTimeDiffSeconds] Results for '$methName': ($diff seconds)")
 		return diff
 	}else{ return null }
 }
