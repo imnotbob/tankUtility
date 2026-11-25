@@ -12,7 +12,7 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *	March 30, 2024
+ *	November 24, 2026
  */
 //file:noinspection unused
 //file:noinspection GroovyUnusedAssignment
@@ -28,6 +28,7 @@ definition(
 	namespace: "imnotbob",
 	author: "Eric S",
 	description: "Virtual device handler for Tank Utility Propane tank monitor",
+	menu: "Integrations",
 	category: "My Apps",
 	iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
 	iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
@@ -36,7 +37,7 @@ definition(
 	oauth:true
 )
 
-static String appVersion() { "0.0.5" }
+static String appVersion() { "0.0.7" }
 
 preferences {
 	page(name: "settings", title: "Settings", content: "settingsPage", install:true)
